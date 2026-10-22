@@ -21,7 +21,8 @@
     "test:e2e": "cross-env GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && playwright test",
     "demo:db": "tsx scripts/build-demo-db.ts",
     "dev:demo": "npm run demo:db && cross-env GABLE_DATA_DIR=.dev-data/demo electron-forge start",
-    "screenshots": "cross-env GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && cross-env SCREENSHOTS=1 playwright test screenshots screens-stage3 screens-stage5"
+    "screenshots": "cross-env GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && cross-env SCREENSHOTS=1 playwright test screenshots screens-stage3 screens-stage5",
+    "icons": "tsx scripts/make-icons.ts"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",

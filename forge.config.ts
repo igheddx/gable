@@ -67,6 +67,8 @@ const config: ForgeConfig = {
     name: 'Gable',
     executableName: 'Gable',
     appBundleId: 'com.gable.app',
+    // Original artwork: see scripts/make-icons.ts. Extension is added per platform.
+    icon: 'resources/icon',
     // Native addons, the OCR engine with its WASM and language data, and the worker script must be real files on disk.
     asar: { unpack: '{**/*.node,**/node_modules/**,**/.vite/build/ocrWorker.cjs}' },
     // Keep only the Vite output plus the external native modules (added in packageAfterCopy).
@@ -77,7 +79,7 @@ const config: ForgeConfig = {
   rebuildConfig: { onlyModules: [] },
   makers: [
     // Windows installer: per-user Squirrel Setup.exe (no admin rights needed). Built on Windows only.
-    new MakerSquirrel({ name: 'Gable', authors: 'Gable', description: 'Gable property ledger' }),
+    new MakerSquirrel({ name: 'Gable', authors: 'Gable', description: 'Gable property ledger', setupIcon: 'resources/icon.ico' }),
     new MakerZIP({}, ['darwin']),
   ],
   hooks: {
