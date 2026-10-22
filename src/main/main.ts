@@ -6,6 +6,10 @@ import { openDatabase, type Db } from '../db/connection';
 import { AppService } from '../services/appService';
 import { CompanyService } from '../services/companyService';
 import { PropertyService } from '../services/propertyService';
+import { CategoryService } from '../services/categoryService';
+import { ExpenseService } from '../services/expenseService';
+import { FinancialService } from '../services/financialService';
+import { ReceiptFiles } from '../services/receiptFiles';
 import { chooseUserDataDir, resolveDataPaths } from '../platform/paths';
 import { isTrustedSender, registerIpc } from './ipc';
 
@@ -107,8 +111,12 @@ if (!app.requestSingleInstanceLock()) {
         app: new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
         companies,
         properties: new PropertyService(db, companies),
+        categories: new CategoryService(db, companies),
+        expenses: new ExpenseService(db, companies, new ReceiptFiles(paths.receipts, paths.staging)),
+        financials: new FinancialService(db),
       },
       {
+        openFile: (p) => shell.openPath(p),
         chooseImageFile: async () => {
           const r = await dialog.showOpenDialog(mainWindow ?? undefined!, {
             title: 'Choose a company logo',

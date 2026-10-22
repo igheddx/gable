@@ -41,3 +41,22 @@ export function formatCents(cents: number, opts: { symbol?: boolean } = {}): str
 export function centsToInput(cents: number): string {
   return formatCents(cents, { symbol: false }).replace(/,/g, '');
 }
+
+/** n / d rounded half away from zero, using integers only. d must be positive. */
+export function roundDiv(n: number, d: number): number {
+  const q = Math.floor((Math.abs(n) * 2 + d) / (2 * d));
+  return n < 0 ? -q : q;
+}
+
+/** Return on cost in basis points (1567 = 15.67%), or null when cost is zero. */
+export function roiBasisPoints(profitCents: number, costCents: number): number | null {
+  if (costCents <= 0) return null;
+  return roundDiv(profitCents * 10_000, costCents);
+}
+
+/** 1567 -> "15.67%", 2500 -> "25.00%", -50 -> "-0.50%". */
+export function formatBasisPoints(bp: number): string {
+  const sign = bp < 0 ? '-' : '';
+  const abs = Math.abs(bp);
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}%`;
+}

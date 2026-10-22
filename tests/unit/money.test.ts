@@ -70,3 +70,23 @@ describe('dates', () => {
     expect(todayIso(new Date(2026, 0, 1, 0, 0))).toBe('2026-01-01');
   });
 });
+
+import { formatBasisPoints, roiBasisPoints, roundDiv } from '../../src/shared/money';
+
+describe('ROI math', () => {
+  it('matches the guide fixtures', () => {
+    expect(roiBasisPoints(4_200_000, 26_800_000)).toBe(1567);
+    expect(formatBasisPoints(1567)).toBe('15.67%');
+    expect(roiBasisPoints(7_000_000, 28_000_000)).toBe(2500);
+    expect(formatBasisPoints(2500)).toBe('25.00%');
+  });
+  it('rounds half away from zero and handles losses and zero cost', () => {
+    expect(roundDiv(5, 10)).toBe(1);
+    expect(roundDiv(-5, 10)).toBe(-1);
+    expect(roundDiv(4, 10)).toBe(0);
+    expect(roiBasisPoints(-2_000_000, 11_000_000)).toBe(-1818);
+    expect(formatBasisPoints(-1818)).toBe('-18.18%');
+    expect(formatBasisPoints(-5)).toBe('-0.05%');
+    expect(roiBasisPoints(100, 0)).toBeNull();
+  });
+});

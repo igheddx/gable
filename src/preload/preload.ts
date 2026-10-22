@@ -24,6 +24,24 @@ const api: GableApi = {
   updateProperty: (id, fields, confirmReopenSale = false) => call('properties:update', { id, fields, confirmReopenSale }),
   archiveProperty: (id) => call('properties:archive', { id }),
   restoreProperty: (id) => call('properties:restore', { id }),
+  getPropertyFinancials: (id) => call('properties:financials', { id }),
+
+  listCategories: (companyId, includeArchived = false) => call('categories:list', { companyId, includeArchived }),
+  createCategory: (input) => call('categories:create', input),
+  renameCategory: (id, name) => call('categories:rename', { id, name }),
+  setCategoryGroup: (id, reportingGroup, confirmed = false) => call('categories:setGroup', { id, reportingGroup, confirmed }),
+  archiveCategory: (id) => call('categories:archive', { id }),
+  restoreCategory: (id) => call('categories:restore', { id }),
+
+  stageReceiptFile: (name, bytes) => call('expenses:stageFile', { name, bytes }),
+  createExpense: (input) => call('expenses:create', input),
+  updateExpense: (id, input) => call('expenses:update', { id, input }),
+  voidExpense: (id) => call('expenses:void', { id }),
+  unvoidExpense: (id) => call('expenses:unvoid', { id }),
+  listExpenses: (query) => call('expenses:list', query),
+  getExpense: (id) => call('expenses:get', { id }),
+  suggestVendors: (companyId, prefix) => call('expenses:vendorSuggestions', { companyId, prefix }),
+  openReceipt: (id) => call('expenses:openAttachment', { id }),
 };
 
 contextBridge.exposeInMainWorld('gable', api);

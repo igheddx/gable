@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { companyInputSchema, propertyFieldsSchema, propertyQuerySchema } from './schemas';
-import type { Company, Property, PropertyPage } from './types';
+import { categoryInputSchema, companyInputSchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
+import type { Category, Company, Expense, ExpenseDetail, ExpensePage, Property, PropertyFinancials, PropertyPage, StagedFile } from './types';
 
 /**
  * The complete renderer-to-main contract. Every channel has an input schema; the main
@@ -36,6 +36,29 @@ export const ipcContract = {
   'properties:update': { input: z.object({ id, fields: propertyFieldsSchema, confirmReopenSale: z.boolean().default(false) }).strict() },
   'properties:archive': { input: z.object({ id }).strict() },
   'properties:restore': { input: z.object({ id }).strict() },
+  'properties:financials': { input: z.object({ id }).strict() },
+
+  'categories:list': { input: z.object({ companyId: id, includeArchived: z.boolean().default(false) }).strict() },
+  'categories:create': { input: categoryInputSchema },
+  'categories:rename': { input: z.object({ id, name: z.string().trim().max(80) }).strict() },
+  'categories:setGroup': { input: z.object({ id, reportingGroup: reportingGroupSchema, confirmed: z.boolean().default(false) }).strict() },
+  'categories:archive': { input: z.object({ id }).strict() },
+  'categories:restore': { input: z.object({ id }).strict() },
+
+  'expenses:stageFile': {
+    input: z.object({
+      name: z.string().min(1).max(260),
+      bytes: z.custom<Uint8Array>((v) => v instanceof Uint8Array, 'Expected file bytes'),
+    }).strict(),
+  },
+  'expenses:create': { input: expenseInputSchema },
+  'expenses:update': { input: z.object({ id, input: expenseUpdateSchema }).strict() },
+  'expenses:void': { input: z.object({ id }).strict() },
+  'expenses:unvoid': { input: z.object({ id }).strict() },
+  'expenses:list': { input: expenseQuerySchema },
+  'expenses:get': { input: z.object({ id }).strict() },
+  'expenses:vendorSuggestions': { input: z.object({ companyId: id, prefix: z.string().max(100) }).strict() },
+  'expenses:openAttachment': { input: z.object({ id }).strict() },
 } as const;
 
 export type IpcChannel = keyof typeof ipcContract;
@@ -81,4 +104,24 @@ export interface GableApi {
   updateProperty(id: number, fields: z.infer<typeof propertyFieldsSchema>, confirmReopenSale?: boolean): R<Property>;
   archiveProperty(id: number): R<Property>;
   restoreProperty(id: number): R<Property>;
+  getPropertyFinancials(id: number): R<PropertyFinancials>;
+
+  listCategories(companyId: number, includeArchived?: boolean): R<Category[]>;
+  createCategory(input: z.infer<typeof categoryInputSchema>): R<Category>;
+  renameCategory(id: number, name: string): R<Category>;
+  setCategoryGroup(id: number, reportingGroup: z.infer<typeof reportingGroupSchema>, confirmed?: boolean): R<Category>;
+  archiveCategory(id: number): R<Category>;
+  restoreCategory(id: number): R<Category>;
+
+  /** Sends the bytes of a file the user picked or dropped; the main process validates and stores a private copy. */
+  stageReceiptFile(name: string, bytes: Uint8Array): R<StagedFile>;
+  createExpense(input: z.input<typeof expenseInputSchema>): R<Expense>;
+  updateExpense(id: number, input: z.input<typeof expenseUpdateSchema>): R<ExpenseDetail>;
+  voidExpense(id: number): R<ExpenseDetail>;
+  unvoidExpense(id: number): R<ExpenseDetail>;
+  listExpenses(query: z.input<typeof expenseQuerySchema>): R<ExpensePage>;
+  getExpense(id: number): R<ExpenseDetail>;
+  suggestVendors(companyId: number, prefix: string): R<string[]>;
+  /** Opens a stored receipt in the system viewer. */
+  openReceipt(attachmentId: number): R<null>;
 }

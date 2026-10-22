@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Db } from '../db/connection';
 import { CompanyRepository, type CompanyRow, type CompanyWrite } from '../db/companyRepository';
 import { SettingsRepository } from '../db/settingsRepository';
+import { CategoryRepository } from '../db/categoryRepository';
 import { AppError } from '../shared/errors';
 import type { CompanyInput } from '../shared/schemas';
 import type { Company } from '../shared/types';
@@ -48,7 +49,10 @@ export class CompanyService {
   create(input: CompanyInput): Company {
     const w = this.validate(input, null);
     const id = this.db.transaction(() => {
-      const newId = this.repo.insert(w, this.now());
+      const now = this.now();
+      const newId = this.repo.insert(w, now);
+      // Every company starts with the common category list, which it can then customize.
+      new CategoryRepository(this.db).seedStarter(newId, now);
       // The first company is the default so the app always has one to open to.
       if (this.repo.list(false).length === 1) this.settings.set(DEFAULT_KEY, String(newId));
       return newId;

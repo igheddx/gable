@@ -38,3 +38,75 @@ export interface PropertyPage {
   page: number;
   pageSize: number;
 }
+
+import type { ReportingGroup } from './categories';
+
+export interface Category {
+  id: number;
+  companyId: number;
+  name: string;
+  reportingGroup: ReportingGroup;
+  isArchived: boolean;
+}
+
+export interface Allocation { categoryId: number; categoryName: string; reportingGroup: ReportingGroup; amountCents: number }
+
+export interface Attachment { id: number; originalName: string; sizeBytes: number; mime: string }
+
+export interface ExpenseEvent { id: number; type: 'created' | 'edited' | 'voided' | 'unvoided'; detail: string; at: string }
+
+export interface Expense {
+  id: number;
+  companyId: number;
+  companyName: string;
+  propertyId: number | null;
+  propertyAddress: string | null;
+  vendorName: string;
+  expenseDate: string;
+  totalCents: number;
+  notes: string;
+  status: 'posted' | 'voided';
+  allocations: Allocation[];
+  attachments: Attachment[];
+  createdAt: string;
+}
+
+export interface ExpenseDetail extends Expense { events: ExpenseEvent[] }
+
+export interface ExpensePage { rows: Expense[]; total: number; page: number; pageSize: number }
+
+export interface StagedFile { stagedId: string; name: string; sizeBytes: number }
+
+export interface YearItem { expenseId: number; date: string; vendorName: string; totalCents: number; categories: string; attachmentCount: number }
+
+export interface YearRow {
+  year: number;
+  /** Purchase price appears once, in the purchase year. */
+  purchaseCents: number;
+  groups: Record<ReportingGroup, number>;
+  categories: { categoryId: number; name: string; group: ReportingGroup; cents: number }[];
+  /** Posted expenses only; excludes the purchase price. */
+  expensesCents: number;
+  /** Purchase price (in its year) plus expenses. */
+  investmentCents: number;
+  /** Shown separately in the sale year; never netted against expenses. */
+  saleProceedsCents: number;
+  items: YearItem[];
+}
+
+export interface PropertyFinancials {
+  propertyId: number;
+  purchasePriceCents: number;
+  salePriceCents: number | null;
+  bridge: {
+    groups: Record<ReportingGroup, number>;
+    expensesCents: number;
+    /** Purchase price plus every posted expense. */
+    projectCostCents: number;
+    /** Only for sold properties. */
+    profitCents: number | null;
+    roiBasisPoints: number | null;
+  };
+  byYear: YearRow[];
+  reconciliation: { lifetimeExpensesCents: number; yearsExpensesCents: number; matches: boolean };
+}

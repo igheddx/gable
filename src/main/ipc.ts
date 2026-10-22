@@ -5,6 +5,9 @@ import { AppError } from '../shared/errors';
 import type { AppService } from '../services/appService';
 import type { CompanyService } from '../services/companyService';
 import type { PropertyService } from '../services/propertyService';
+import type { CategoryService } from '../services/categoryService';
+import type { ExpenseService } from '../services/expenseService';
+import type { FinancialService } from '../services/financialService';
 
 type Input<C extends IpcChannel> = z.output<(typeof ipcContract)[C]['input']>;
 type Handlers = { [C in IpcChannel]: (input: Input<C>) => unknown };
@@ -13,11 +16,16 @@ export interface Services {
   app: AppService;
   companies: CompanyService;
   properties: PropertyService;
+  categories: CategoryService;
+  expenses: ExpenseService;
+  financials: FinancialService;
 }
 
 export interface Platform {
   /** Native file picker; resolves to a chosen path or null if cancelled. */
   chooseImageFile(): Promise<string | null>;
+  /** Opens a stored receipt in the OS viewer. Only paths returned by the expense service are passed in. */
+  openFile(path: string): Promise<string>;
 }
 
 /** Pure so it can be tested without Electron: is this frame our own UI? */
@@ -78,6 +86,29 @@ export function buildHandlers(s: Services, platform: Platform): Handlers {
     'properties:update': (i) => s.properties.update(i.id, i.fields, { confirmReopenSale: i.confirmReopenSale }),
     'properties:archive': (i) => s.properties.archive(i.id),
     'properties:restore': (i) => s.properties.restore(i.id),
+    'properties:financials': (i) => s.financials.propertyFinancials(i.id),
+
+    'categories:list': (i) => s.categories.list(i.companyId, i.includeArchived),
+    'categories:create': (i) => s.categories.create(i.companyId, i.name, i.reportingGroup),
+    'categories:rename': (i) => s.categories.rename(i.id, i.name),
+    'categories:setGroup': (i) => s.categories.setReportingGroup(i.id, i.reportingGroup, i.confirmed),
+    'categories:archive': (i) => s.categories.archive(i.id),
+    'categories:restore': (i) => s.categories.restore(i.id),
+
+    'expenses:stageFile': (i) => s.expenses.stageFile(i.name, i.bytes),
+    'expenses:create': (i) => s.expenses.create(i),
+    'expenses:update': (i) => s.expenses.update(i.id, i.input),
+    'expenses:void': (i) => s.expenses.void(i.id),
+    'expenses:unvoid': (i) => s.expenses.unvoid(i.id),
+    'expenses:list': (i) => s.expenses.list(i),
+    'expenses:get': (i) => s.expenses.get(i.id),
+    'expenses:vendorSuggestions': (i) => s.expenses.suggestVendors(i.companyId, i.prefix),
+    'expenses:openAttachment': async (i) => {
+      const f = s.expenses.attachmentFile(i.id);
+      const err = await platform.openFile(f.path);
+      if (err) throw new AppError('NOT_FOUND', 'That receipt file could not be opened. It may have been moved or deleted.');
+      return null;
+    },
   };
 }
 

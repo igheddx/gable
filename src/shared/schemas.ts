@@ -54,3 +54,57 @@ export const propertyQuerySchema = z
   })
   .strict();
 export type PropertyQuery = z.input<typeof propertyQuerySchema>;
+
+// ---------- Categories and expenses ----------
+import { REPORTING_GROUPS } from './categories';
+
+export const reportingGroupSchema = z.enum(REPORTING_GROUPS);
+
+export const categoryInputSchema = z
+  .object({ companyId: z.number().int().positive(), name: text(80), reportingGroup: reportingGroupSchema })
+  .strict();
+
+export const allocationInputSchema = z
+  .object({ categoryId: z.number().int().positive(), amountCents: z.number().int().min(1).max(MAX_CENTS) })
+  .strict();
+
+export const expenseInputSchema = z
+  .object({
+    companyId: z.number().int().positive(),
+    propertyId: z.number().int().positive().nullable(),
+    vendorName: text(160),
+    expenseDate: isoDate,
+    totalCents: z.number().int().min(1).max(MAX_CENTS),
+    allocations: z.array(allocationInputSchema).min(1).max(20),
+    notes: text(5000),
+    /** One value per form instance; saving twice with the same key can only ever create one expense. */
+    idempotencyKey: z.string().min(16).max(64).regex(/^[A-Za-z0-9-]+$/),
+    /** Files previously staged with expenses:stageFile. */
+    stagedFileIds: z.array(z.string().regex(/^[0-9a-f]{32}$/)).max(20).default([]),
+  })
+  .strict();
+export type ExpenseInput = z.input<typeof expenseInputSchema>;
+
+export const expenseUpdateSchema = expenseInputSchema
+  .omit({ companyId: true, idempotencyKey: true })
+  .extend({ removeAttachmentIds: z.array(z.number().int().positive()).max(50).default([]) })
+  .strict();
+export type ExpenseUpdate = z.input<typeof expenseUpdateSchema>;
+
+export const expenseQuerySchema = z
+  .object({
+    scope: z.union([z.number().int().positive(), z.literal('all')]),
+    q: z.string().max(200).default(''),
+    /** A property id, 'general' for company overhead, or null for any. */
+    property: z.union([z.number().int().positive(), z.literal('general')]).nullable().default(null),
+    categoryId: z.number().int().positive().nullable().default(null),
+    from: isoDate.nullable().default(null),
+    to: isoDate.nullable().default(null),
+    includeVoided: z.boolean().default(false),
+    sort: z.enum(['date', 'amount', 'vendor']).default('date'),
+    dir: z.enum(['asc', 'desc']).default('desc'),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+export type ExpenseQuery = z.input<typeof expenseQuerySchema>;
