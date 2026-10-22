@@ -76,7 +76,7 @@ Using Electron `app.getPath('userData')` (and adapters):
 - Dev/test/demo use separate roots via an environment variable. The demo database is never created in production automatically.
 - Nothing is written to the install directory.
 
-## 5. Data model (draft)
+## 5. Data model (draft; `company` and `property` implemented in migration 2)
 
 All money is `INTEGER` cents. All date-only columns are `TEXT` `YYYY-MM-DD`. Audit timestamps are ISO UTC `TEXT`.
 

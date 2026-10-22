@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { BarChart3, Building2, FileText, Home, Receipt, Settings as SettingsIcon, Palette } from 'lucide-react';
 import { useApp } from './AppContext';
-import { COMPANIES } from '../fixtures';
 import { SHOWCASE_ENABLED } from '../env';
 
 const NAV = [
@@ -12,7 +11,7 @@ const NAV = [
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { route, navigate, scope, setScope } = useApp();
+  const { route, navigate, scope, setScope, companies } = useApp();
   const link = (path: string, label: string, Icon: typeof Home) => {
     const current = route.path === path || route.path.startsWith(`${path}/`) || (path === '/expenses' && route.path.startsWith('/receipts'));
     return (
@@ -43,9 +42,9 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <div className="company">
           <label htmlFor="company-switcher" className="company__label">Company</label>
-          <select id="company-switcher" className="company__select" value={scope} onChange={(e) => setScope(e.target.value)}>
-            {COMPANIES.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+          <select id="company-switcher" className="company__select" value={String(scope)} onChange={(e) => setScope(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.displayName}{c.isDefault ? ' (default)' : ''}</option>
             ))}
             <option value="all">All Companies (view only)</option>
           </select>

@@ -3,12 +3,11 @@ import { Plus, ScanLine, Search } from 'lucide-react';
 import { Badge, Button, EmptyState, SelectField, TextField } from '../components';
 import { PageHeader } from '../shell/Shell';
 import { useApp } from '../shell/AppContext';
-import { COMPANIES } from '../fixtures';
 import { formatCents } from '../../shared/money';
 import { formatUsDate } from '../../shared/dates';
 
 export function ExpensesPage() {
-  const { navigate, scope, expenses, companyName, propertyLabel, receipts } = useApp();
+  const { navigate, scope, expenses, companyName, receipts } = useApp();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const waiting = receipts.filter((r) => r.status === 'Needs review' || r.status === 'Failed').length;
@@ -18,9 +17,9 @@ export function ExpensesPage() {
     return expenses
       .filter((e) => scope === 'all' || e.companyId === scope)
       .filter((e) => !cat || e.category === cat)
-      .filter((e) => !needle || e.vendor.toLowerCase().includes(needle) || propertyLabel(e.propertyId).toLowerCase().includes(needle))
+      .filter((e) => !needle || e.vendor.toLowerCase().includes(needle))
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [expenses, scope, q, cat, propertyLabel]);
+  }, [expenses, scope, q, cat]);
 
   const categories = [...new Set(expenses.map((e) => e.category))].sort();
   const context = scope === 'all' ? 'All companies, view only' : companyName(scope);
@@ -41,7 +40,7 @@ export function ExpensesPage() {
       />
       <div className="page-body">
         <div className="filters" role="search" aria-label="Filter expenses">
-          <TextField label="Search vendor or property" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type to filter" type="search" />
+          <TextField label="Search vendor" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type to filter" type="search" />
           <SelectField label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">All categories</option>
             {categories.map((c) => <option key={c}>{c}</option>)}
@@ -78,8 +77,8 @@ export function ExpensesPage() {
                     <tr key={e.id}>
                       <td className="num">{formatUsDate(e.date)}</td>
                       <td className="table__primary">{e.vendor} {e.preview && <Badge tone="review" small>Sample, not stored</Badge>}</td>
-                      <td className="truncate" title={propertyLabel(e.propertyId)}>{e.propertyId ? propertyLabel(e.propertyId) : <span className="muted">General company</span>}</td>
-                      {scope === 'all' && <td>{COMPANIES.find((c) => c.id === e.companyId)?.name}</td>}
+                      <td className="truncate">{e.propertyId ? `Property #${e.propertyId}` : <span className="muted">General company</span>}</td>
+                      {scope === 'all' && <td>{companyName(e.companyId)}</td>}
                       <td>{e.category}</td>
                       <td className="money num">{formatCents(e.cents)}</td>
                     </tr>

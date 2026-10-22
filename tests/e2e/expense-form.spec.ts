@@ -1,23 +1,19 @@
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
-function exe(): string {
-  const dir = fs.readdirSync('out').find((d) => d.startsWith('Gable-'))!;
-  const base = path.join('out', dir);
-  return path.resolve(process.platform === 'darwin' ? path.join(base, 'Gable.app', 'Contents', 'MacOS', 'Gable') : path.join(base, 'Gable.exe'));
-}
+import { demoDir, go, launch, switchCompany } from './helpers';
 
 let app: ElectronApplication;
 let page: Page;
 let dataDir: string;
 
 test.beforeEach(async () => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gable-form-'));
-  app = await electron.launch({ executablePath: exe(), env: { ...process.env, GABLE_DATA_DIR: dataDir } });
+  dataDir = demoDir();
+  app = await launch(dataDir);
   page = await app.firstWindow();
-  await page.evaluate(() => { window.location.hash = '/expenses/new'; });
+  await expect(page.locator('#company-switcher')).toBeVisible();
+  await switchCompany(page, /Oak House/); // the demo default company is Cedar Homes
+  await go(page, '/expenses/new');
 });
 test.afterEach(async () => {
   await app.close();
@@ -99,10 +95,10 @@ test('leaving with unsaved work asks first, and Keep editing preserves the entry
 
 test('switching company with unsaved work asks first and never moves the form', async () => {
   await vendor().fill('Redwood Hardware');
-  await page.getByLabel('Company', { exact: true }).selectOption('cedar');
+  await switchCompany(page, /Cedar Homes/);
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(page.getByLabel('Company', { exact: true })).toHaveValue('oak');
+  await expect(page.locator('#company-switcher option:checked')).toHaveText('Oak House LLC');
   await expect(page.getByText('For Oak House LLC')).toBeVisible();
 });
 
@@ -116,8 +112,8 @@ test('unsupported receipt types are explained, not silently ignored', async () =
 });
 
 test('All Companies requires choosing a company before an expense can be saved', async () => {
-  await page.evaluate(() => { window.location.hash = '/expenses'; });
-  await page.getByLabel('Company', { exact: true }).selectOption('all');
+  await go(page, '/expenses');
+  await switchCompany(page, /All Companies/);
   await page.getByRole('button', { name: 'Add expense' }).click();
   await vendorOrWait();
   await page.getByRole('button', { name: 'Save expense' }).click();

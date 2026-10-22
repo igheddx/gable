@@ -13,7 +13,7 @@ Last updated: 2026-10-22
 | 0 | Product contract & docs | Done (committed 43e1afc) | Review requirements |
 | 1 | Desktop foundation + packaging proof | Mac verified; Windows NOT RUN | Desktop runs; Windows path exists |
 | 2 | Design system + expense screen | Mac verified; owner visual review pending | Visual approval |
-| 3 | Companies, properties, search | Not started | |
+| 3 | Companies, properties, search | Mac verified | |
 | 4 | Manual expenses, totals | Not started | Totals reconcile |
 | 5 | Receipts + OCR | Not started | Saves time |
 | 6 | Dashboard, reports, exports | Not started | Exports reconcile |
@@ -61,6 +61,24 @@ Last updated: 2026-10-22
 - Fixture B "2026 expenses are $20,000" matches commission + seller closing.
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
+
+## Stage 3 evidence (2026-10-22)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Typecheck, lint | `npm run typecheck`, `npm run lint` | PASS |
+| Unit/integration (real SQLite, separate temp DB per test) | `npm test` | PASS: 83 tests. Companies (default, restart, duplicates, archive/replace default, restore, logo validation and opaque storage), properties (validation, historical dates, sale rules, DB constraints and triggers, archived-company rejection in service and storage, company immutability, reopen-sale confirmation), search (scope isolation, All Companies labels, partial address/city/ZIP, punctuation/apostrophes/accents, SQL wildcard and injection text, filters, sort, pagination, index sync on edit), duration (1,885 days / 5y 2m and 424 days fixtures, leap years, DST, month-end clamping) |
+| Packaged-app E2E (isolated data dirs, demo data built via the real services) | `npm run test:e2e` | PASS: 21 tests. Adds first-run company then property, restart opens the default, switching leaves the default unchanged, company-scoped and All Companies search, invalid sale date and reopen-sale confirmation, archiving the default needs a replacement, adding from All Companies needs a company choice, expense form offers only that company's properties |
+| Screenshots | `npm run screenshots`, `SCREENSHOTS=1 npx playwright test screens-stage3` | Captured and inspected (property list, detail, by year, edit, settings, setup, archive dialog) |
+
+Stage 3 decisions and limits:
+- The company of a property is immutable in v1 (service and a database trigger), which is stricter than "once financial records exist". Revisit if David needs to move an unused property.
+- Company names must be unique ignoring case and punctuation.
+- Property detail shows purchase, sale, exact days held and readable duration (calendar aware, month-end clamped: Jan 31 to Feb 28 counts as one month). The cost bridge and By Year expense columns show "Unavailable" until expenses are stored in Stage 4. "Add receipts" on a property opens the sample review page, which says it is a preview.
+- Expense Save is still preview-only (in memory), as labeled on screen; Stage 4 replaces it.
+- Company logo picking uses a native dialog in the main process; the renderer receives a data URL, never a path. The dialog path itself was not exercised by automated tests (only the service-level logo validation was).
+- The demo database now contains fictional companies and properties built through the real services: `npm run dev:demo`.
+- Windows CI: macOS job passed for the first commits. The Windows job failed first on a path-semantics unit test (fixed), then `npm run test:e2e` failed on Windows for a reason not yet known (annotations from the `github` reporter were added to find it).
 
 ## Stage 2 evidence (2026-10-22)
 

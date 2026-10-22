@@ -1,24 +1,42 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Combobox, CurrencyField, DateField, Disclosure, Notice, SelectField, TextAreaField, useToast } from '../components';
+import { Button, Combobox, CurrencyField, DateField, Disclosure, ErrorState, Notice, SelectField, TextAreaField, useToast } from '../components';
 import { ReceiptDropZone, type PickedFile } from '../components/ReceiptDropZone';
 import { AllocationEditor, allocatedCents, validateAllocations, type AllocLine } from '../components/AllocationEditor';
 import { PageHeader } from '../shell/Shell';
 import { useApp } from '../shell/AppContext';
-import { CATEGORIES, COMPANIES, PROPERTIES, VENDORS } from '../fixtures';
+import { CATEGORIES, VENDORS } from '../fixtures';
+import { api, unwrap, useLoad } from '../api';
+import type { Property } from '../../shared/types';
 import { formatCents, parseCurrency } from '../../shared/money';
 import { formatUsDate, parseUsDate, todayIso } from '../../shared/dates';
 
 type Errors = Partial<Record<'company' | 'vendor' | 'date' | 'category' | 'amount', string>>;
 
 export function ExpenseEntryPage() {
-  const { route, navigate, scope, setDirty, addExpense, companyName } = useApp();
+  const { route, navigate } = useApp();
+  const pid = Number(route.query.get('property')) || 0;
+  const { data, error, loading } = useLoad(() => (pid ? unwrap(api().getProperty(pid)) : Promise.resolve(null)), [pid]);
+  if (loading) return null;
+  if (error || (data && (data.isArchived || data.companyArchived))) {
+    return (
+      <div className="page-body">
+        <ErrorState title="Cannot add an expense here" action={<Button onClick={() => navigate('/expenses')}>Back to expenses</Button>}>
+          {error ?? 'This property or its company is archived. Restore it before adding expenses.'}
+        </ErrorState>
+      </div>
+    );
+  }
+  return <ExpenseForm preset={data ?? undefined} />;
+}
+
+function ExpenseForm({ preset }: { preset?: Property }) {
+  const { navigate, scope, setDirty, addExpense, companyName, companies } = useApp();
   const toast = useToast();
 
-  const presetProperty = PROPERTIES.find((p) => p.id === route.query.get('property'));
   // Ownership is decided when the form opens and never follows later company switches.
-  const [companyId, setCompanyId] = useState<string>(presetProperty?.companyId ?? (scope === 'all' ? '' : scope));
-  const lockedCompany = Boolean(presetProperty) || scope !== 'all';
-  const [propertyId, setPropertyId] = useState(presetProperty?.id ?? '');
+  const [companyId, setCompanyId] = useState<number>(preset?.companyId ?? (scope === 'all' ? 0 : scope));
+  const lockedCompany = Boolean(preset) || scope !== 'all';
+  const [propertyId, setPropertyId] = useState<string>(preset ? String(preset.id) : '');
   const [vendor, setVendor] = useState('');
   const [date, setDate] = useState(formatUsDate(todayIso()));
   const [category, setCategory] = useState('');
@@ -38,9 +56,13 @@ export function ExpenseEntryPage() {
     return () => setDirty(false);
   }, [dirty, setDirty]);
 
-  const propertyOptions = useMemo(
-    () => [{ value: '', label: 'General company expense (no property)' }, ...PROPERTIES.filter((p) => p.companyId === companyId).map((p) => ({ value: p.id, label: p.address, detail: `${p.city} ${p.zip}` }))],
+  const { data: companyProps } = useLoad(
+    () => (companyId ? unwrap(api().listProperties({ scope: companyId, pageSize: 100, sort: 'address' })) : Promise.resolve(null)),
     [companyId],
+  );
+  const propertyOptions = useMemo(
+    () => [{ value: '', label: 'General company expense (no property)' }, ...(companyProps?.rows ?? []).map((p) => ({ value: String(p.id), label: p.address1, detail: `${p.city} ${p.zip}` }))],
+    [companyProps],
   );
   const vendorOptions = useMemo(() => VENDORS.map((v) => ({ value: v, label: v })), []);
   const categoryOptions = useMemo(() => CATEGORIES.map((c) => ({ value: c, label: c })), []);
@@ -83,7 +105,7 @@ export function ExpenseEntryPage() {
     }
     setSaving(true);
     addExpense({
-      companyId, propertyId: propertyId || null, vendor: vendor.trim(), date: dateParsed.iso,
+      companyId, propertyId: propertyId ? Number(propertyId) : null, vendor: vendor.trim(), date: dateParsed.iso,
       category: split ? `Split: ${lines.map((l) => l.category).join(' + ')}` : category, cents: amountParsed.cents,
     });
     toast(`Expense added: ${vendor.trim()} ${formatCents(amountParsed.cents)} (sample preview, not stored).`);
@@ -103,7 +125,7 @@ export function ExpenseEntryPage() {
     <>
       <PageHeader
         title="Add expense"
-        context={companyId ? <>For {companyName(companyId)}{presetProperty ? <> · {presetProperty.address}</> : null}</> : 'Choose a company to begin'}
+        context={companyId ? <>For {companyName(companyId)}{preset ? <> · {preset.address1}</> : null}</> : 'Choose a company to begin'}
         actions={
           <Button variant="ghost" onClick={() => navigate('/expenses')}>Cancel</Button>
         }
@@ -126,11 +148,11 @@ export function ExpenseEntryPage() {
                   <p className="static-value">{companyId ? companyName(companyId) : '—'}</p>
                 </div>
               ) : (
-                <SelectField className="span-2" label="Company" required value={companyId} error={showErrors ? errors.company : null}
-                  onChange={(e) => { setCompanyId(e.target.value); setPropertyId(''); }}
+                <SelectField className="span-2" label="Company" required value={companyId || ''} error={showErrors ? errors.company : null}
+                  onChange={(e) => { setCompanyId(Number(e.target.value)); setPropertyId(''); }}
                   hint="Viewing All Companies. Choose which company owns this expense.">
                   <option value="">Choose a company…</option>
-                  {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.displayName}</option>)}
                 </SelectField>
               )}
 

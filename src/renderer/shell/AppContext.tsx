@@ -1,14 +1,18 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { isDirty, setDirtyFlag } from './dirtyFlag';
 import { Button, Dialog } from '../components';
-import { COMPANIES, PROPERTIES, SEED_EXPENSES, RECEIPTS, type FxExpense, type FxReceipt, type ReceiptStatus } from '../fixtures';
+import { RECEIPTS, type FxExpense, type FxReceipt, type ReceiptStatus } from '../fixtures';
+import { api, errorMessage, unwrap } from '../api';
+import type { Company } from '../../shared/types';
 
-export type CompanyScope = 'all' | string;
+/** A company id, or 'all' for the explicit read-only aggregate view. */
+export type CompanyScope = 'all' | number;
 
 export interface Route { path: string; query: URLSearchParams }
 
 function parseHash(): Route {
-  const raw = window.location.hash.replace(/^#/, '') || '/expenses';
-  const [path = '/expenses', q = ''] = raw.split('?');
+  const raw = window.location.hash.replace(/^#/, '') || '/properties';
+  const [path = '/properties', q = ''] = raw.split('?');
   return { path, query: new URLSearchParams(q) };
 }
 
@@ -16,17 +20,21 @@ interface AppState {
   route: Route;
   /** Navigate, asking first if a form has unsaved work. */
   navigate: (to: string) => void;
+  companies: Company[];
+  defaultCompanyId: number | null;
   scope: CompanyScope;
-  /** Switch company view. Never alters the default company or any open form's ownership. */
+  /** Switch which company is shown. Never changes the default company or any open form's ownership. */
   setScope: (s: CompanyScope) => void;
+  /** Re-read companies after a change. */
+  refreshCompanies: () => Promise<Company[]>;
   /** Pages with editable forms register whether they hold unsaved work. */
   setDirty: (dirty: boolean) => void;
+  /** Preview-only expense list until expenses are stored (next stage). */
   expenses: FxExpense[];
   addExpense: (e: Omit<FxExpense, 'id' | 'preview'>) => void;
   receipts: FxReceipt[];
   setReceiptStatus: (id: string, status: ReceiptStatus, suggestion?: FxReceipt['suggestion']) => void;
-  companyName: (id: string) => string;
-  propertyLabel: (id: string | null) => string;
+  companyName: (id: number) => string;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -36,13 +44,34 @@ export const useApp = (): AppState => {
   return v;
 };
 
-export function AppProvider({ children }: { children: ReactNode }) {
+type Pending = { kind: 'route'; to: string } | { kind: 'scope'; to: CompanyScope };
+
+export function AppProvider({ children, onFirstRun }: { children: ReactNode; onFirstRun?: boolean }) {
+  void onFirstRun;
   const [route, setRoute] = useState<Route>(parseHash);
-  const [scope, setScopeState] = useState<CompanyScope>('oak');
-  const [expenses, setExpenses] = useState<FxExpense[]>(SEED_EXPENSES);
+  const [companies, setCompanies] = useState<Company[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [scope, setScopeState] = useState<CompanyScope | null>(null);
+  const [expenses, setExpenses] = useState<FxExpense[]>([]);
   const [receipts, setReceipts] = useState<FxReceipt[]>(RECEIPTS);
-  const dirty = useRef(false);
-  const [pending, setPending] = useState<null | { kind: 'route'; to: string } | { kind: 'scope'; to: CompanyScope }>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+
+  const refreshCompanies = useCallback(async () => {
+    const list = await unwrap(api().listCompanies(false));
+    setCompanies(list);
+    return list;
+  }, []);
+
+  // Open to the default company on launch. Later switches never touch the default.
+  useEffect(() => {
+    unwrap(api().listCompanies(false)).then(
+      (list) => {
+        setCompanies(list);
+        setScopeState((s) => s ?? list.find((c) => c.isDefault)?.id ?? list[0]?.id ?? 'all');
+      },
+      (e) => setLoadError(errorMessage(e)),
+    );
+  }, []);
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -50,44 +79,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const go = (to: string) => {
-    window.location.hash = to;
-  };
+  const go = (to: string) => { window.location.hash = to; };
 
   const navigate = useCallback((to: string) => {
-    if (dirty.current) setPending({ kind: 'route', to });
+    if (isDirty()) setPending({ kind: 'route', to });
     else go(to);
   }, []);
 
   const setScope = useCallback((s: CompanyScope) => {
-    if (dirty.current) setPending({ kind: 'scope', to: s });
+    if (isDirty()) setPending({ kind: 'scope', to: s });
     else setScopeState(s);
   }, []);
 
-  const setDirty = useCallback((d: boolean) => {
-    dirty.current = d;
-  }, []);
+  const setDirty = useCallback((d: boolean) => setDirtyFlag(d), []);
 
-  const value = useMemo<AppState>(
-    () => ({
-      route, navigate, scope, setScope, setDirty, expenses,
-      addExpense: (e) => setExpenses((xs) => [{ ...e, id: `new${xs.length}`, preview: true }, ...xs]),
-      receipts,
-      setReceiptStatus: (id, status, suggestion) =>
-        setReceipts((rs) => rs.map((r) => (r.id === id ? { ...r, status, suggestion: suggestion === undefined ? r.suggestion : suggestion } : r))),
-      companyName: (id) => COMPANIES.find((c) => c.id === id)?.name ?? 'Unknown company',
-      propertyLabel: (id) => (id ? (PROPERTIES.find((p) => p.id === id)?.address ?? 'Unknown property') : 'General company expense'),
-    }),
-    [route, navigate, scope, setScope, setDirty, expenses, receipts],
+  const activeCompanies = companies ?? [];
+  // If the viewed company was archived, fall back to the default (view only; default is unchanged).
+  const effectiveScope: CompanyScope | null =
+    scope === null ? null : scope === 'all' || activeCompanies.some((c) => c.id === scope) ? scope : (activeCompanies.find((c) => c.isDefault)?.id ?? 'all');
+
+  const value = useMemo<AppState | null>(
+    () =>
+      companies === null || effectiveScope === null
+        ? null
+        : {
+            route, navigate, companies, defaultCompanyId: companies.find((c) => c.isDefault)?.id ?? null,
+            scope: effectiveScope, setScope, refreshCompanies, setDirty, expenses,
+            addExpense: (e) => setExpenses((xs) => [{ ...e, id: `new${xs.length}`, preview: true }, ...xs]),
+            receipts,
+            setReceiptStatus: (id, status, suggestion) =>
+              setReceipts((rs) => rs.map((r) => (r.id === id ? { ...r, status, suggestion: suggestion === undefined ? r.suggestion : suggestion } : r))),
+            companyName: (id) => companies.find((c) => c.id === id)?.displayName ?? 'Archived company',
+          },
+    [route, navigate, companies, effectiveScope, setScope, refreshCompanies, setDirty, expenses, receipts],
   );
 
   const confirmDiscard = () => {
     if (!pending) return;
-    dirty.current = false;
+    setDirtyFlag(false);
     if (pending.kind === 'route') go(pending.to);
     else setScopeState(pending.to);
     setPending(null);
   };
+
+  if (loadError) {
+    return <div className="boot"><p role="alert">Gable could not open your data. {loadError}</p></div>;
+  }
+  if (!value) return <div className="boot"><p className="muted">Opening Gable…</p></div>;
 
   return (
     <Ctx.Provider value={value}>
@@ -105,8 +143,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       >
         <p>
           {pending?.kind === 'scope'
-            ? 'You have an expense in progress. It stays with the company it was started for and will not move to the company you are switching to.'
-            : 'You have an expense in progress. If you leave now, what you entered will be lost.'}
+            ? 'You have unsaved work. It stays with the company it was started for and will not move to the company you are switching to.'
+            : 'You have unsaved work. If you leave now, what you entered will be lost.'}
         </p>
       </Dialog>
     </Ctx.Provider>

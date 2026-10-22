@@ -2,10 +2,10 @@
  * Design review captures. Run with `npm run screenshots` (needs a packaged test build).
  * Writes PNGs to docs/screenshots/<size>/. Skipped during normal e2e runs.
  */
-import { _electron as electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { demoDir, launch, switchCompany } from './helpers';
 
 test.skip(process.env.SCREENSHOTS !== '1', 'set SCREENSHOTS=1 (npm run screenshots)');
 
@@ -19,17 +19,13 @@ const SIZES = [
   { name: '1280x800-150', w: Math.round(1280 / 1.5), h: Math.round(800 / 1.5), zoom: 1.5 },
 ];
 
-function exe(): string {
-  const dir = fs.readdirSync('out').find((d) => d.startsWith('Gable-'))!;
-  const base = path.join('out', dir);
-  return path.resolve(process.platform === 'darwin' ? path.join(base, 'Gable.app', 'Contents', 'MacOS', 'Gable') : path.join(base, 'Gable.exe'));
-}
-
 for (const size of SIZES) {
   test(`captures ${size.name}`, async () => {
-    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gable-shots-'));
-    const app = await electron.launch({ executablePath: exe(), env: { ...process.env, GABLE_DATA_DIR: dataDir } });
+    const dataDir = demoDir();
+    const app = await launch(dataDir);
     const page = await app.firstWindow();
+    await expect(page.locator('#company-switcher')).toBeVisible();
+    await switchCompany(page, /Oak House/);
     await app.evaluate(async ({ BrowserWindow }, s) => {
       const win = BrowserWindow.getAllWindows()[0]!;
       win.setMinimumSize(300, 300);

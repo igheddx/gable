@@ -1,33 +1,21 @@
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-
-function packagedExecutable(): string {
-  const out = path.resolve('out');
-  const dir = fs.readdirSync(out).find((d) => d.startsWith('Gable-'));
-  if (!dir) throw new Error('Run `GABLE_E2E=1 npm run package` first');
-  const base = path.join(out, dir);
-  if (process.platform === 'darwin') return path.join(base, 'Gable.app', 'Contents', 'MacOS', 'Gable');
-  return path.join(base, process.platform === 'win32' ? 'Gable.exe' : 'Gable');
-}
+import { launch, packagedExecutable, tempDir } from './helpers';
 
 let dataDir: string;
 test.beforeEach(() => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gable-e2e-'));
+  dataDir = tempDir('e2e');
 });
 test.afterEach(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-const launch = (): Promise<ElectronApplication> =>
-  electron.launch({ executablePath: packagedExecutable(), env: { ...process.env, GABLE_DATA_DIR: dataDir } });
-
 test('opens, initializes the database, and reports app info over IPC', async () => {
-  const app = await launch();
+  const app = await launch(dataDir);
   const page = await app.firstWindow();
-  await expect(page.getByRole('heading', { name: 'Expenses' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Gable' })).toBeVisible(); // first run: no companies yet
   const info = await page.evaluate(() => (window as any).gable.getAppInfo());
   expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 2 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
@@ -35,7 +23,7 @@ test('opens, initializes the database, and reports app info over IPC', async () 
 });
 
 test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API', async () => {
-  const app = await launch();
+  const app = await launch(dataDir);
   const page = await app.firstWindow();
   const probe = await page.evaluate(() => ({
     require: typeof (globalThis as any).require,
@@ -55,7 +43,7 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
 });
 
 test('rejects malformed IPC payloads sent from the renderer', async () => {
-  const app = await launch();
+  const app = await launch(dataDir);
   const page = await app.firstWindow();
   const results = await page.evaluate(async () => {
     const g = (window as any).gable;
@@ -70,13 +58,13 @@ test('rejects malformed IPC payloads sent from the renderer', async () => {
 });
 
 test('data survives an app restart', async () => {
-  let app = await launch();
+  let app = await launch(dataDir);
   let page = await app.firstWindow();
   const set = await page.evaluate(() => (window as any).gable.setSetting('ui.lastVisitedNote', 'persisted'));
   expect(set).toEqual({ ok: true, value: null });
   await app.close();
 
-  app = await launch();
+  app = await launch(dataDir);
   page = await app.firstWindow();
   const got = await page.evaluate(() => (window as any).gable.getSetting('ui.lastVisitedNote'));
   expect(got).toEqual({ ok: true, value: 'persisted' });
@@ -84,7 +72,7 @@ test('data survives an app restart', async () => {
 });
 
 test('a second instance on the same data folder quits and does not open another window', async () => {
-  const first = await launch();
+  const first = await launch(dataDir);
   await first.firstWindow();
   const child = spawn(packagedExecutable(), [], { env: { ...process.env, GABLE_DATA_DIR: dataDir }, stdio: 'ignore' });
   const exitCode = await new Promise<number | null>((resolve) => {
@@ -103,7 +91,7 @@ test('a second instance on the same data folder quits and does not open another 
 });
 
 test('content security policy blocks inline scripts and network requests', async () => {
-  const app = await launch();
+  const app = await launch(dataDir);
   const page = await app.firstWindow();
   const probe = await page.evaluate(async () => {
     const s = document.createElement('script');

@@ -18,7 +18,7 @@ function initialDraft(r: FxReceipt): Draft {
 }
 
 export function ReceiptReviewPage() {
-  const { receipts, setReceiptStatus, setDirty, companyName, propertyLabel, navigate } = useApp();
+  const { receipts, setReceiptStatus, setDirty, navigate, route, scope, companyName } = useApp();
   const toast = useToast();
   const [selectedId, setSelectedId] = useState(receipts[0]!.id);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -159,7 +159,7 @@ export function ReceiptReviewPage() {
               <h2 className="panel__title">Details</h2>
               <Badge tone={TONE[receipt.status]}>{receipt.status}</Badge>
             </div>
-            <p className="muted">{companyName(receipt.companyId)} · {propertyLabel(receipt.propertyId)}</p>
+            <p className="muted">{scope === 'all' ? 'Sample receipt' : `Sample receipt · will belong to ${companyName(scope)}`}{route.query.get('property') ? ' · property chosen from its page' : ''}</p>
 
             {receipt.status === 'Failed' && <Notice tone="danger">{receipt.note} Fill in the details below by hand to continue.</Notice>}
             {receipt.status === 'Processing' && <Notice>Reading this file. It will be ready to review shortly.</Notice>}
