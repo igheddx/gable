@@ -15,6 +15,6 @@ describe('data paths', () => {
 
   it('packaged runs use the OS folder unless explicitly overridden', () => {
     expect(chooseUserDataDir({ isPackaged: true, envOverride: undefined, osUserData: '/os/Gable', cwd: '/repo' })).toBe('/os/Gable');
-    expect(chooseUserDataDir({ isPackaged: true, envOverride: 'x/y', osUserData: '/os/Gable', cwd: '/repo' })).toBe(path.join('/repo', 'x', 'y'));
+    expect(chooseUserDataDir({ isPackaged: true, envOverride: 'x/y', osUserData: '/os/Gable', cwd: '/repo' })).toBe(path.resolve('/repo', 'x', 'y'));
   });
 });
