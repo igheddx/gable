@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { categoryInputSchema, companyInputSchema, draftPatchSchema, draftQuerySchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
+import type { OverviewData, ReportDoc, ReportRequest } from './reportTypes';
 import type { Category, Company, Expense, ExpenseDetail, ExpensePage, ImportResult, PostAllResult, Property, PropertyFinancials, PropertyPage, ReceiptDraft, ReceiptDraftDetail, ReceiptEvent, StagedFile, VendorRule } from './types';
 
 /**
@@ -14,6 +15,17 @@ export const settingKeySchema = z.enum(SETTING_KEYS);
 export type SettingKey = z.infer<typeof settingKeySchema>;
 
 const id = z.number().int().positive();
+
+const isoDateOrNull = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
+const reportRequestSchema = z
+  .object({
+    kind: z.enum(['property', 'sold-performance', 'expense-activity', 'portfolio-snapshot']),
+    scope: z.union([z.number().int().positive(), z.literal('all')]),
+    from: isoDateOrNull,
+    to: isoDateOrNull,
+    propertyId: z.number().int().positive().nullable(),
+  })
+  .strict();
 
 export const ipcContract = {
   'app:getInfo': { input: z.undefined() },
@@ -76,6 +88,13 @@ export const ipcContract = {
   'receipts:retry': { input: z.object({ id, overwriteEdited: z.boolean().default(false) }).strict() },
   'receipts:cancel': { input: z.object({ id }).strict() },
   'receipts:preview': { input: z.object({ id, page: z.number().int().min(1).max(200) }).strict() },
+
+  'reports:overview': {
+    input: z.object({ scope: z.union([id, z.literal('all')]), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodLabel: z.string().max(60) }).strict(),
+  },
+  'reports:build': { input: reportRequestSchema },
+  'reports:exportXlsx': { input: reportRequestSchema },
+  'reports:exportPdf': { input: reportRequestSchema },
 
   'vendorRules:list': { input: z.object({ companyId: id }).strict() },
   'vendorRules:create': { input: z.object({ companyId: id, vendorName: z.string().trim().min(1).max(160), categoryId: id }).strict() },
@@ -166,6 +185,12 @@ export interface GableApi {
   previewReceipt(id: number, page: number): R<{ dataUrl: string; pageCount: number }>;
   /** Subscribe to reading progress. Returns an unsubscribe function. */
   onReceiptEvent(cb: (e: ReceiptEvent) => void): () => void;
+
+  getOverview(scope: number | 'all', from: string, to: string, periodLabel: string): R<OverviewData>;
+  buildReport(request: ReportRequest): R<ReportDoc>;
+  /** Builds the report, asks where to save it, and writes a real .xlsx file. */
+  exportReportXlsx(request: ReportRequest): R<{ saved: boolean; fileName: string | null }>;
+  exportReportPdf(request: ReportRequest): R<{ saved: boolean; fileName: string | null }>;
 
   listVendorRules(companyId: number): R<VendorRule[]>;
   createVendorRule(companyId: number, vendorName: string, categoryId: number): R<VendorRule[]>;

@@ -19,6 +19,7 @@ Node 22.13 or newer (`.nvmrc` pins 22). With nvm: `nvm install && nvm use`.
 | `npm test` | Unit and integration tests (real SQLite in temp folders) |
 | `npm run package:mac` | Local macOS package in `out/` |
 | `npm run test:e2e` | Packages the app and runs Playwright tests against the packaged build with isolated data |
+| `npm run screenshots` | Packages a test build and captures review screenshots into `docs/screenshots/` (not committed) |
 | `npm run make:win` | Windows x64 installer (must be run on Windows) |
 
 Environment: `GABLE_DATA_DIR=<folder>` overrides where Gable keeps its data (tests and demo use this).
@@ -38,3 +39,10 @@ The installer is written to `out\make\squirrel.windows\x64\`. It is unsigned (Wi
 ## Where data lives
 
 Packaged app: the per-user application data folder (`%APPDATA%\Gable\data` on Windows, `~/Library/Application Support/Gable/data` on macOS). Never in the install folder.
+
+## Receipts, reports and exports
+
+- Receipts (JPG, PNG, PDF) are read on this computer with Tesseract and pdf.js. The OCR engine, WASM core and English language data ship inside the app and are loaded from disk; nothing is downloaded. Limits: 25 MB per file, PDFs up to 30 pages (scanned PDFs read the first 10 pages).
+- Reports can be exported as real `.xlsx` workbooks and as PDFs. Both are produced from the same data as the on-screen report.
+- Tests set `GABLE_TEST_EXPORT_DIR` to save exports without the native save dialog. Normal use never needs it.
+- A small support log is kept at `<data folder>/logs/gable.log`. It records what happened and timings, not receipt contents or amounts.

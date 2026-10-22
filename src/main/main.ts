@@ -11,10 +11,12 @@ import { ExpenseService } from '../services/expenseService';
 import { FinancialService } from '../services/financialService';
 import { ReceiptFiles } from '../services/receiptFiles';
 import { ReceiptService } from '../services/receiptService';
+import { ReportService } from '../services/reportService';
 import { ThreadPoolExecutor } from '../services/ocr/executors';
 import { missingOcrResources, resolveOcrResources } from '../services/ocr/resources';
 import { RECEIPT_EVENT_CHANNEL } from '../shared/ipc';
 import os from 'node:os';
+import { createLogger } from './log';
 import { chooseUserDataDir, resolveDataPaths } from '../platform/paths';
 import { isTrustedSender, registerIpc } from './ipc';
 
@@ -45,6 +47,47 @@ const CSP = DEV_URL
   : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 let mainWindow: BrowserWindow | null = null;
+
+/** Base64 of the bundled fonts, read once, so printed reports never depend on installed or network fonts. */
+let fontCache: { sans: string | null; serif: string | null } | null = null;
+function reportFonts(): { sans: string | null; serif: string | null } {
+  if (fontCache) return fontCache;
+  const dirs = app.isPackaged
+    ? [path.join(__dirname, '..', 'renderer', MAIN_WINDOW_VITE_NAME, 'assets')]
+    : [path.join(process.cwd(), 'node_modules', '@fontsource-variable', 'inter', 'files'), path.join(process.cwd(), 'node_modules', '@fontsource-variable', 'source-serif-4', 'files')];
+  const find = (prefix: string): string | null => {
+    for (const d of dirs) {
+      try {
+        const f = fs.readdirSync(d).find((n) => n.startsWith(prefix) && n.endsWith('.woff2'));
+        if (f) return fs.readFileSync(path.join(d, f)).toString('base64');
+      } catch { /* try the next folder */ }
+    }
+    return null;
+  };
+  fontCache = { sans: find('inter-latin-wght-normal'), serif: find('source-serif-4-latin-wght-normal') };
+  return fontCache;
+}
+
+/** Prints HTML to PDF in a hidden, script-free window with its own session, so the app's security policy and data stay out of it. */
+async function renderPdf(html: string, opts: { landscape: boolean; footerTemplate: string }): Promise<Uint8Array> {
+  const file = path.join(app.getPath('temp'), `gable-report-${process.pid}-${Date.now()}.html`);
+  fs.writeFileSync(file, html, 'utf8');
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false, session: session.fromPartition('gable-report-print') },
+  });
+  try {
+    await win.loadFile(file);
+    return await win.webContents.printToPDF({
+      pageSize: 'Letter', landscape: opts.landscape, printBackground: true, displayHeaderFooter: true,
+      headerTemplate: '<span></span>', footerTemplate: opts.footerTemplate,
+      margins: { top: 0.55, bottom: 0.75, left: 0.5, right: 0.5 },
+    });
+  } finally {
+    win.destroy();
+    fs.rmSync(file, { force: true });
+  }
+}
 let db: Db | null = null;
 let ocr: ThreadPoolExecutor | null = null;
 
@@ -121,7 +164,10 @@ if (!app.requestSingleInstanceLock()) {
     if (missing.length) console.error('[ocr] bundled files missing:', missing.join(', '));
     // Worker files must be real files on disk, so a packaged build runs them from the unpacked folder.
     const workerFile = path.join(__dirname, 'ocrWorker.cjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
-    ocr = new ThreadPoolExecutor(workerFile, resources, Math.max(1, Math.min(2, os.cpus().length - 1)));
+    const logger = createLogger(path.join(paths.root, 'logs'));
+    logger.log(`start gable ${app.getVersion()} ${process.platform} ${process.arch}`);
+    ocr = new ThreadPoolExecutor(workerFile, resources, Math.max(1, Math.min(2, os.cpus().length - 1)), [], (e) => logger.log(`ocr job=${e.id} ${e.type} ${e.phase}${e.detail ? ` ${e.detail}` : ''}${e.ms !== undefined ? ` ${e.ms}ms` : ''}${e.code ? ` ${e.code}` : ''}`));
+    const properties = new PropertyService(db, companies);
     const receipts = new ReceiptService(db, companies, expenses, files, ocr, { concurrency: 2 });
     receipts.onEvent((e) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(RECEIPT_EVENT_CHANNEL, e);
@@ -132,14 +178,28 @@ if (!app.requestSingleInstanceLock()) {
       {
         app: new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
         companies,
-        properties: new PropertyService(db, companies),
+        properties,
         categories: new CategoryService(db, companies),
         expenses,
         financials: new FinancialService(db),
         receipts,
+        reports: new ReportService(db, companies, properties),
       },
       {
         openFile: (p) => shell.openPath(p),
+        chooseSavePath: async (defaultName, filterName, ext) => {
+          // Automated tests set this to skip the native dialog; people never see or need it.
+          const testDir = process.env.GABLE_TEST_EXPORT_DIR;
+          if (testDir) return path.join(testDir, defaultName);
+          const r = await dialog.showSaveDialog(mainWindow ?? undefined!, {
+            title: 'Save report',
+            defaultPath: path.join(app.getPath('documents'), defaultName),
+            filters: [{ name: filterName, extensions: [ext] }],
+          });
+          return r.canceled || !r.filePath ? null : r.filePath;
+        },
+        renderPdf: (html, opts) => renderPdf(html, opts),
+        fonts: () => reportFonts(),
         chooseReceiptFiles: async () => {
           const r = await dialog.showOpenDialog(mainWindow ?? undefined!, {
             title: 'Choose receipts',
@@ -173,5 +233,8 @@ if (!app.requestSingleInstanceLock()) {
     void ocr?.shutdown();
     db?.close();
     db = null;
+    // A reading thread stuck in native code cannot be stopped politely and would keep Gable running
+    // in the background after its window closes. Give it a moment, then exit for real.
+    setTimeout(() => app.exit(0), 3000).unref();
   });
 }

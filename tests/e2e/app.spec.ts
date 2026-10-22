@@ -41,7 +41,8 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
         'updateExpense', 'voidExpense',
         'cancelReceipt', 'createVendorRule', 'deleteVendorRule', 'getReceipt', 'importReceipts', 'listReceipts', 'listVendorRules',
         'markReceiptReviewed', 'onReceiptEvent', 'pickReceiptFiles', 'postReceipt', 'postReviewedReceipts', 'previewReceipt',
-        'removeReceipt', 'retryReceipt', 'skipReceipt', 'unskipReceipt', 'updateReceipt']).sort(),
+        'removeReceipt', 'retryReceipt', 'skipReceipt', 'unskipReceipt', 'updateReceipt',
+        'buildReport', 'exportReportPdf', 'exportReportXlsx', 'getOverview']).sort(),
   );
   // Task-specific methods only: nothing that takes a SQL string, a file path, or a channel name.
   expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|(?<!stageReceipt)file(?!s)/i.test(k))).toBe(false);

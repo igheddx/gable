@@ -4,7 +4,7 @@ import { OcrFileError, type JobPayloads, type JobType, type OcrResources } from 
 
 /** Worker thread entry: owns one OCR engine and handles one job at a time. */
 const port = parentPort!;
-const pipeline = new OcrPipeline((workerData as { resources: OcrResources }).resources);
+const pipeline = new OcrPipeline((workerData as { resources: OcrResources }).resources, (message) => port.postMessage({ id: 0, kind: 'trace', message }));
 
 port.on('message', async (msg: { id: number; type: JobType; payload: JobPayloads[JobType] }) => {
   try {

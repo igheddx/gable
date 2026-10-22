@@ -1,7 +1,8 @@
 export const MAX_PDF_PAGES = 30;
 /** Scanned PDFs are read page by page; this bounds time and memory. Text-layer PDFs are read in full. */
 export const OCR_PAGE_LIMIT = 10;
-export const JOB_TIMEOUT_MS = 180_000;
+/** A stuck job must never hold a worker for long. Reading a receipt can take a while; looking at one should not. */
+export const JOB_TIMEOUT_MS: Record<'inspect' | 'recognize' | 'preview', number> = { inspect: 30_000, recognize: 180_000, preview: 30_000 };
 
 export interface OcrResources {
   /** Absolute paths to bundled files. Nothing is ever downloaded. */

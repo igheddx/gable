@@ -27,7 +27,7 @@ export class OcrPipeline {
   private tess: Promise<TessWorker> | null = null;
   private pdfjs: Promise<PdfJs> | null = null;
 
-  constructor(private readonly res: OcrResources) {}
+  constructor(private readonly res: OcrResources, private readonly trace: (message: string) => void = () => {}) {}
 
   async dispose(): Promise<void> {
     const t = this.tess;
@@ -37,6 +37,7 @@ export class OcrPipeline {
 
   private engine(): Promise<TessWorker> {
     if (!this.tess) {
+      this.trace('engine: creating');
       this.tess = createWorker('eng', 1, {
         workerPath: this.res.workerPath,
         corePath: this.res.corePath,
@@ -44,7 +45,7 @@ export class OcrPipeline {
         gzip: true,
         cacheMethod: 'none', // never write language data anywhere else
       });
-      this.tess.catch(() => { this.tess = null; });
+      this.tess.then(() => this.trace('engine: ready'), () => { this.tess = null; this.trace('engine: failed to start'); });
     }
     return this.tess;
   }
@@ -177,8 +178,11 @@ export class OcrPipeline {
   /** Light cleanup, then recognition. If the first read looks poor, try turning the page. */
   private async ocrImage(bytes: Buffer): Promise<{ text: string; confidence: number }> {
     const eng = await this.engine();
+    this.trace('ocr: image loading');
     const img = await loadImage(bytes).catch(() => { throw new OcrFileError('corrupt', 'This image could not be read. It may be damaged.'); });
+    this.trace('ocr: reading');
     let best = await recognizeCanvas(eng, prepare(img, 0));
+    this.trace(`ocr: first pass done confidence=${Math.round(best.confidence)}`);
     if (best.confidence < 60 || best.words < 4) {
       for (const deg of [90, 270, 180]) {
         const r = await recognizeCanvas(eng, prepare(img, deg));

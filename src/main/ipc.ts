@@ -9,6 +9,8 @@ import type { CategoryService } from '../services/categoryService';
 import type { ExpenseService } from '../services/expenseService';
 import type { FinancialService } from '../services/financialService';
 import type { ReceiptService } from '../services/receiptService';
+import type { ReportService } from '../services/reportService';
+import { exportReport, type ExportPlatform } from './reportExport';
 import fs from 'node:fs';
 import path from 'node:path';
 import { MAX_RECEIPT_BYTES } from '../services/receiptFiles';
@@ -24,9 +26,10 @@ export interface Services {
   expenses: ExpenseService;
   financials: FinancialService;
   receipts: ReceiptService;
+  reports: ReportService;
 }
 
-export interface Platform {
+export interface Platform extends ExportPlatform {
   /** Native file picker; resolves to a chosen path or null if cancelled. */
   chooseImageFile(): Promise<string | null>;
   /** Opens a stored receipt in the OS viewer. Only paths returned by the expense service are passed in. */
@@ -138,6 +141,10 @@ export function buildHandlers(s: Services, platform: Platform): Handlers {
     'receipts:retry': (i) => s.receipts.retry(i.id, i.overwriteEdited),
     'receipts:cancel': (i) => { s.receipts.cancel(i.id); return null; },
     'receipts:preview': (i) => s.receipts.preview(i.id, i.page),
+    'reports:overview': (i) => s.reports.overview(i.scope, i.from, i.to, i.periodLabel),
+    'reports:build': (i) => s.reports.build(i),
+    'reports:exportXlsx': (i) => exportReport('xlsx', i, { reports: s.reports, companies: s.companies, platform }),
+    'reports:exportPdf': (i) => exportReport('pdf', i, { reports: s.reports, companies: s.companies, platform }),
     'vendorRules:list': (i) => s.receipts.rules(i.companyId),
     'vendorRules:create': (i) => s.receipts.createRule(i.companyId, i.vendorName, i.categoryId),
     'vendorRules:delete': (i) => { s.receipts.deleteRule(i.id); return null; },

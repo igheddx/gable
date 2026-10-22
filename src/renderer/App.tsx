@@ -11,7 +11,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { CompanyEditPage } from './pages/CompanyEditPage';
 import { SetupPage } from './pages/SetupPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
+import { OverviewPage } from './pages/OverviewPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { ShowcasePage } from './pages/ShowcasePage';
 import { SHOWCASE_ENABLED } from './env';
 
@@ -19,7 +20,7 @@ function Routes() {
   const { route } = useApp();
   switch (route.path) {
     case '/overview':
-      return <PlaceholderPage title="Overview" what="Your portfolio summary will appear here once properties and expenses are saved." />;
+      return <OverviewPage />;
     case '/properties':
       return <PropertiesPage />;
     case '/properties/new':
@@ -35,7 +36,7 @@ function Routes() {
     case '/receipts/review':
       return <ReceiptReviewPage />;
     case '/reports':
-      return <PlaceholderPage title="Reports" what="Property profit, sold-property performance and expense reports will be added in a later stage." />;
+      return <ReportsPage key={route.query.toString()} />;
     case '/settings':
       return <SettingsPage />;
     case '/settings/categories':

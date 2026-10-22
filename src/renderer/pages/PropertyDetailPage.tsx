@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Pencil, Plus, ScanLine } from 'lucide-react';
+import { FileBarChart, Pencil, Plus, ScanLine } from 'lucide-react';
 import { Badge, Button, ErrorState, Notice, type Tone } from '../components';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { GROUP_LABELS, REPORTING_GROUPS, SELLING_GROUPS, type ReportingGroup } from '../../shared/categories';
@@ -44,6 +44,7 @@ export function PropertyDetailPage() {
         actions={
           <>
             <Button variant="secondary" icon={<ScanLine size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/receipts/review?property=${p.id}&add=1`)}>Add receipts</Button>
+            <Button variant="secondary" icon={<FileBarChart size={16} aria-hidden="true" />} onClick={() => navigate(`/reports?kind=property&property=${p.id}`)}>Report</Button>
             <Button variant="secondary" icon={<Pencil size={16} aria-hidden="true" />} onClick={() => navigate(`/properties/edit?id=${p.id}`)}>Edit</Button>
             <Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/expenses/new?property=${p.id}`)}>Add expense</Button>
           </>

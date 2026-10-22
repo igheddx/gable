@@ -16,7 +16,7 @@ Last updated: 2026-10-22
 | 3 | Companies, properties, search | Mac verified | |
 | 4 | Manual expenses, totals | Mac verified | Totals reconcile |
 | 5 | Receipts + OCR | Mac verified; Windows CI pending | Saves time |
-| 6 | Dashboard, reports, exports | Not started | Exports reconcile |
+| 6 | Dashboard, reports, exports | Mac verified; Windows CI pending | Exports reconcile |
 | 7 | Backup, restore, migrations | Not started | Full restore works |
 | 8 | QA + Windows RC | Not started | |
 | 9 | Acceptance walkthrough | Not started | |
@@ -61,6 +61,29 @@ Last updated: 2026-10-22
 - Fixture B "2026 expenses are $20,000" matches commission + seller closing.
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
+
+## Open issue: intermittent receipt-reading hang (found in Stage 5/6)
+
+Symptom: in full packaged-app test runs (and once on Windows CI) a receipt-reading job sometimes never finished, and quitting the app then hung because a worker thread could not be stopped. It did not reproduce in isolation or in a 60-round stress test of the worker pool. Mitigations added: per-job timeouts (inspect 30 s, preview 30 s, read 180 s), a hard exit 3 seconds after quit begins, and a support log (`<data>/logs/gable.log`) with job timings and engine milestones (no receipt contents). After these, 3 consecutive full macOS runs passed (40/40 each, earlier runs had 1 failure in about 3). Root cause is NOT proven; the leading hypothesis is a race when two worker threads start native/WASM code at the same moment. If it recurs, the log shows which step stalled. Treat the OCR reading as unproven on Windows until CI is green repeatedly.
+
+## Stage 6 evidence (2026-10-22, macOS)
+
+| Check | Result |
+| --- | --- |
+| Unit/integration | PASS: 189 tests. Report tests use three companies and the guide's fixtures A and B plus a 2025 loss with a voided expense and a very long address |
+| Sold-property performance (by SALE date) | PASS: 2026 includes 125 Oak Drive (cost $268,000, profit $42,000, 15.67%) and 71 Northgate Terrace (cost $280,000, profit $70,000, 25.00%) with their 2025/2021 costs; totals $548,000 cost, $112,000 profit, 20.44% overall; the 2025 sale is excluded |
+| Expense activity (by EXPENSE date) | PASS: only expense-dated rows; general company expenses in a separate section; by-category, by-property, expense list and allocations all equal the same total; a split expense counts once |
+| Overview | PASS: figures equal the report totals (active properties, unsold investment, realized profit, general company expenses, shown separately), per-company subtotals in All Companies |
+| Excel | PASS: real .xlsx written without a spreadsheet library (fflate zip + Office Open XML). Read back with ExcelJS: numeric money cells with a $ format, real date cells, percent format, frozen header, autofilter, widths, basis/company/as-of on every sheet; strings starting with = + - @ are stored as quoted text and no formula cells exist; no file paths in the package |
+| PDF | PASS: self-contained HTML printed by the built-in print engine in a hidden script-free window; fonts embedded; repeating table headers; page numbers ("Page 1 of N"). Text extracted from exported PDFs with pdf.js matches the screen totals |
+| Export errors | PASS: writing is atomic (temporary file then rename); a missing folder gives "That folder no longer exists"; messages for file-in-use, permission, disk full |
+
+Stage 6 limits:
+- The native Save dialog was not exercised by automation (tests use `GABLE_TEST_EXPORT_DIR`). Cancelling the dialog is covered by logic only.
+- PDF pages were inspected through extracted text and file size, not yet by eye on every report; visual PDF review is part of Stage 8.
+- "Last 12 months" and year presets use the computer's clock. Dates in tests are fixed.
+- Excel formulas are not written; totals are values (so they cannot drift from the screen).
+- Recent activity on the overview is "most recently recorded", not by expense date.
 
 ## Windows CI evidence (GitHub Actions `windows-latest`)
 

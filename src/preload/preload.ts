@@ -64,6 +64,11 @@ const api: GableApi = {
     return () => ipcRenderer.removeListener(RECEIPT_EVENT_CHANNEL, listener);
   },
 
+  getOverview: (scope, from, to, periodLabel) => call('reports:overview', { scope, from, to, periodLabel }),
+  buildReport: (request) => call('reports:build', request),
+  exportReportXlsx: (request) => call('reports:exportXlsx', request),
+  exportReportPdf: (request) => call('reports:exportPdf', request),
+
   listVendorRules: (companyId) => call('vendorRules:list', { companyId }),
   createVendorRule: (companyId, vendorName, categoryId) => call('vendorRules:create', { companyId, vendorName, categoryId }),
   deleteVendorRule: (id) => call('vendorRules:delete', { id }),

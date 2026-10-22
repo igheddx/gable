@@ -25,6 +25,17 @@ async function open(dir = demoDir()) {
   return { app, page, dir };
 }
 
+/** If a wait fails, include the app's own job log in the error so a flaky hang can be diagnosed from CI output. */
+async function withLog<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    let tail = '(no log)';
+    try { tail = fs.readFileSync(path.join(dir, 'data', 'logs', 'gable.log'), 'utf8').split('\n').slice(-40).join('\n'); } catch { /* none */ }
+    throw new Error(`${(e as Error).message}\n--- gable.log (last lines) ---\n${tail}`, { cause: e });
+  }
+}
+
 async function addFiles(page: Page, files: string[]) {
   await page.getByRole('button', { name: 'Add receipts' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Add receipts' });
@@ -67,14 +78,14 @@ test('a mixed batch: good files are read, bad files are reported one by one, and
   const { app, page, dir } = await open();
   const dialog = await addFiles(page, [fx.clean, fx.rotated, fx.digitalPdf, fx.scannedPdf, fx.ambiguous, fx.corrupt, fx.encryptedPdf, fx.longPdf]);
   await dialog.getByRole('button', { name: /Add 8 receipts to review queue/ }).click();
-  await expect(dialog.getByText('Some files were not added:')).toBeVisible(READ);
+  await withLog(dir, () => expect(dialog.getByText('Some files were not added:')).toBeVisible({ timeout: 60_000 }));
   await expect(dialog.getByText(/corrupt\.png: This image could not be read/)).toBeVisible();
   await expect(dialog.getByText(/encrypted\.pdf: This PDF is password protected/)).toBeVisible();
   await expect(dialog.getByText(/thirty-one-pages\.pdf: This PDF has 31 pages/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(queue(page).getByRole('button')).toHaveCount(5);
   // Wait until every receipt has been read.
-  await expect(queue(page).getByText('Needs review')).toHaveCount(5, READ);
+  await withLog(dir, () => expect(queue(page).getByText('Needs review')).toHaveCount(5, { timeout: 90_000 }));
 
   // Digital PDF: text layer, one document across both pages.
   await queue(page).getByRole('button', { name: /digital-invoice\.pdf/ }).click();
