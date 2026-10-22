@@ -49,6 +49,10 @@ export function forkSpawner(workerFile: string, resources: OcrResources, execArg
   };
 }
 
+/** A reader must say it has loaded within this time, or it is replaced (first start can be slow while the OS checks its files). */
+export const STARTUP_TIMEOUT_MS = 15_000;
+const STARTUP_ATTEMPTS = 3;
+
 interface Slot { handle: WorkerHandle | null; busy: boolean }
 interface Pending { id: number; type: JobType; payload: unknown; opts: RunOpts; resolve: (v: never) => void; reject: (e: Error) => void }
 
@@ -61,6 +65,7 @@ export class PoolExecutor implements OcrExecutor {
   private readonly queue: Pending[] = [];
   private nextId = 1;
   private closed = false;
+  private readonly ready = new WeakSet<WorkerHandle>();
 
   constructor(private readonly spawn: Spawn, size: number, private readonly onLog: JobLog = () => {}) {
     this.slots = Array.from({ length: Math.max(1, size) }, () => ({ handle: null, busy: false }));
@@ -81,9 +86,16 @@ export class PoolExecutor implements OcrExecutor {
     for (const s of this.slots) { s.handle?.kill(); s.handle = null; }
   }
 
+  /** True while a reader has been launched but has not yet reported that it is ready. */
+  private anyStarting(): boolean {
+    return this.slots.some((s) => s.handle !== null && !this.ready.has(s.handle));
+  }
+
   private pump(): void {
     for (const slot of this.slots) {
       if (slot.busy) continue;
+      // Readers are launched one at a time: starting several at the same moment has proven unreliable.
+      if (slot.handle === null && this.anyStarting()) continue;
       let job = this.queue.shift();
       while (job?.opts.signal?.aborted) {
         job.reject(new OcrFileError('cancelled', 'Reading was cancelled.'));
@@ -94,14 +106,14 @@ export class PoolExecutor implements OcrExecutor {
     }
   }
 
-  private start(slot: Slot, job: Pending): void {
+  private start(slot: Slot, job: Pending, attempt = 1, startedAt = Date.now()): void {
     slot.busy = true;
-    const startedAt = Date.now();
-    this.onLog({ id: job.id, type: job.type, phase: 'start', detail: describe(job) });
+    if (attempt === 1) this.onLog({ id: job.id, type: job.type, phase: 'start', detail: describe(job) });
     let handle: WorkerHandle;
     try {
       handle = slot.handle ?? this.spawn();
-    } catch {
+    } catch (e) {
+      this.onLog({ id: job.id, type: job.type, phase: 'crash', detail: `spawn failed: ${(e as Error).message}`.slice(0, 200) });
       slot.busy = false;
       job.reject(new OcrFileError('failed', 'The reading process could not be started.'));
       this.pump();
@@ -114,6 +126,7 @@ export class PoolExecutor implements OcrExecutor {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      clearTimeout(startup);
       job.opts.signal?.removeEventListener('abort', onAbort);
       for (const s of stops) s();
       if (killWorker) { slot.handle = null; handle.kill(); }
@@ -123,7 +136,11 @@ export class PoolExecutor implements OcrExecutor {
       this.pump();
     };
     const onMessage = (m: { id: number; kind: 'progress' | 'result' | 'error' | 'trace'; progress?: Progress; result?: unknown; code?: OcrErrorCode; message?: string }) => {
-      if (m.kind === 'trace') { this.onLog({ id: job.id, type: job.type, phase: 'trace', detail: m.message }); return; }
+      if (m.kind === 'trace') {
+        if (m.message?.startsWith('reader: loaded')) { this.ready.add(handle); clearTimeout(startup); this.pump(); }
+        this.onLog({ id: job.id, type: job.type, phase: 'trace', detail: m.message });
+        return;
+      }
       if (m.id !== job.id) return;
       if (m.kind === 'progress') job.opts.onProgress?.(m.progress!);
       else if (m.kind === 'result') finish(() => job.resolve(m.result as never), false);
@@ -138,6 +155,21 @@ export class PoolExecutor implements OcrExecutor {
       this.onLog({ id: job.id, type: job.type, phase: 'timeout', ms: Date.now() - startedAt });
       finish(() => job.reject(new OcrFileError('timeout', 'Reading this file took too long and was stopped.')), true);
     }, JOB_TIMEOUT_MS[job.type]);
+    // A reader that starts but never reports in is replaced, and the job is sent again.
+    const startup = this.ready.has(handle) ? undefined : setTimeout(() => {
+      if (finished || this.ready.has(handle)) return;
+      this.onLog({ id: job.id, type: job.type, phase: 'crash', detail: `reader did not start (attempt ${attempt})` });
+      finished = true;
+      clearTimeout(timer);
+      job.opts.signal?.removeEventListener('abort', onAbort);
+      for (const x of stops) x();
+      slot.handle = null;
+      handle.kill();
+      if (attempt < STARTUP_ATTEMPTS) { this.start(slot, job, attempt + 1, startedAt); return; }
+      slot.busy = false;
+      job.reject(new OcrFileError('failed', 'The reading process could not be started.'));
+      this.pump();
+    }, STARTUP_TIMEOUT_MS);
     stops.push(handle.onMessage(onMessage as never), handle.onExit(onExit));
     job.opts.signal?.addEventListener('abort', onAbort);
     handle.postMessage({ id: job.id, type: job.type, payload: job.payload });

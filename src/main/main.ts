@@ -186,7 +186,10 @@ if (!app.requestSingleInstanceLock()) {
     // Each reader is its own operating-system process, so a reader that gets stuck can be killed for real:
     // it can never freeze Gable or stop it from quitting, and a crash there cannot take Gable down.
     const spawn: Spawn = () => {
+      logger.log('reader: spawning');
       const child = utilityProcess.fork(workerFile, [JSON.stringify(resources)], { serviceName: 'Gable reader', stdio: 'ignore' });
+      child.on('spawn', () => logger.log(`reader: spawned pid ${child.pid}`));
+      child.on('exit', (code) => logger.log(`reader: exited code ${code}`));
       return {
         postMessage: (m) => child.postMessage(m),
         onMessage: (cb) => { const f = (m: unknown) => cb(m as never); child.on('message', f); return () => { child.off('message', f); }; },

@@ -173,6 +173,7 @@ test('drafts and corrections survive closing and reopening the app', async () =>
   await page.getByRole('textbox', { name: /Expense date/ }).click(); // leaving the field saves it
   await page.waitForTimeout(500);
   await app.close();
+  await new Promise((r) => setTimeout(r, 3000)); // let the first instance fully exit before the next starts
 
   app = await launch(dir);
   page = await app.firstWindow();
