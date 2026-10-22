@@ -18,10 +18,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && playwright test",
+    "test:e2e": "cross-env GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && playwright test",
     "demo:db": "tsx scripts/build-demo-db.ts",
-    "dev:demo": "npm run demo:db && GABLE_DATA_DIR=.dev-data/demo electron-forge start",
-    "screenshots": "GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && SCREENSHOTS=1 playwright test screenshots"
+    "dev:demo": "npm run demo:db && cross-env GABLE_DATA_DIR=.dev-data/demo electron-forge start",
+    "screenshots": "cross-env GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && cross-env SCREENSHOTS=1 playwright test screenshots screens-stage3"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",
@@ -38,10 +38,12 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "cross-env": "10.1.0",
     "electron": "45.0.0",
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0",
+    "pdf-lib": "1.17.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.0",
@@ -51,11 +53,15 @@
   "dependencies": {
     "@fontsource-variable/inter": "5.3.0",
     "@fontsource-variable/source-serif-4": "5.3.1",
+    "@napi-rs/canvas": "1.0.13",
+    "@tesseract.js-data/eng": "1.0.0",
     "better-sqlite3": "13.0.3",
     "electron-squirrel-startup": "1.0.1",
     "lucide-react": "1.61.0",
+    "pdfjs-dist": "6.4.299",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "tesseract.js": "7.0.0",
     "zod": "4.6.7"
   }
 }
