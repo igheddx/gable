@@ -43,7 +43,7 @@ export function PropertyDetailPage() {
         context={<>{p.city}, {p.state} {p.zip} · {p.companyName} · <Badge tone={TONE[p.status]!} icon={false}>{p.status}</Badge>{p.isArchived && <> <Badge tone="neutral" icon={false}>Archived</Badge></>}</>}
         actions={
           <>
-            <Button variant="secondary" icon={<ScanLine size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/receipts/review?property=${p.id}`)}>Add receipts</Button>
+            <Button variant="secondary" icon={<ScanLine size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/receipts/review?property=${p.id}&add=1`)}>Add receipts</Button>
             <Button variant="secondary" icon={<Pencil size={16} aria-hidden="true" />} onClick={() => navigate(`/properties/edit?id=${p.id}`)}>Edit</Button>
             <Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/expenses/new?property=${p.id}`)}>Add expense</Button>
           </>

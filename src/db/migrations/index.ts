@@ -199,4 +199,88 @@ export const migrations: Migration[] = [
       ).join('\n      ')}
     `,
   },
+  {
+    version: 4,
+    name: 'receipt-review-and-vendor-rules',
+    sql: `
+      CREATE TABLE vendor_rule (
+        id          INTEGER PRIMARY KEY,
+        company_id  INTEGER NOT NULL REFERENCES company(id),
+        vendor_key  TEXT NOT NULL,
+        vendor_name TEXT NOT NULL,
+        category_id INTEGER NOT NULL REFERENCES category(id),
+        created_at  TEXT NOT NULL,
+        UNIQUE (company_id, vendor_key)
+      ) STRICT;
+      CREATE TRIGGER vendor_rule_company_check BEFORE INSERT ON vendor_rule
+      BEGIN
+        SELECT RAISE(ABORT, 'category belongs to a different company')
+          WHERE (SELECT company_id FROM category WHERE id = NEW.category_id) IS NOT NEW.company_id;
+      END;
+
+      -- A draft is one receipt (one or more pages) waiting for a person to review it.
+      -- It is never an expense and never counts in any total until it is posted.
+      CREATE TABLE receipt_draft (
+        id                 INTEGER PRIMARY KEY,
+        company_id         INTEGER NOT NULL REFERENCES company(id),
+        property_id        INTEGER REFERENCES property(id),
+        status             TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'needs_review', 'reviewed', 'failed', 'skipped', 'saved')),
+        error_message      TEXT,
+        vendor             TEXT,
+        expense_date       TEXT CHECK (expense_date IS NULL OR expense_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        total_cents        INTEGER CHECK (total_cents IS NULL OR total_cents > 0),
+        notes              TEXT,
+        category_id        INTEGER REFERENCES category(id),
+        split              INTEGER NOT NULL DEFAULT 0 CHECK (split IN (0, 1)),
+        allocations        TEXT,
+        suggestions        TEXT,
+        touched            TEXT NOT NULL DEFAULT '[]',
+        ocr_text           TEXT,
+        ocr_confidence     INTEGER,
+        ocr_notes          TEXT,
+        remember_vendor    INTEGER NOT NULL DEFAULT 0 CHECK (remember_vendor IN (0, 1)),
+        duplicate_override INTEGER NOT NULL DEFAULT 0 CHECK (duplicate_override IN (0, 1)),
+        posting_token      TEXT NOT NULL UNIQUE,
+        posted_expense_id  INTEGER REFERENCES expense(id),
+        page_count         INTEGER NOT NULL DEFAULT 1,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL,
+        CHECK ((status = 'saved') = (posted_expense_id IS NOT NULL))
+      ) STRICT;
+      CREATE INDEX draft_company_status ON receipt_draft (company_id, status);
+
+      CREATE TABLE receipt_draft_file (
+        id            INTEGER PRIMARY KEY,
+        draft_id      INTEGER NOT NULL REFERENCES receipt_draft(id),
+        position      INTEGER NOT NULL,
+        original_name TEXT NOT NULL,
+        stored_name   TEXT NOT NULL UNIQUE,
+        sha256        TEXT NOT NULL,
+        size_bytes    INTEGER NOT NULL,
+        mime          TEXT NOT NULL,
+        pages         INTEGER NOT NULL DEFAULT 1
+      ) STRICT;
+      CREATE INDEX draft_file_draft ON receipt_draft_file (draft_id);
+      CREATE INDEX draft_file_hash ON receipt_draft_file (sha256);
+      CREATE INDEX attachment_hash ON expense_attachment (sha256);
+
+      CREATE TRIGGER draft_checks_insert BEFORE INSERT ON receipt_draft
+      BEGIN
+        SELECT RAISE(ABORT, 'company is archived') WHERE (SELECT is_archived FROM company WHERE id = NEW.company_id) = 1;
+        SELECT RAISE(ABORT, 'property belongs to a different company')
+          WHERE NEW.property_id IS NOT NULL AND (SELECT company_id FROM property WHERE id = NEW.property_id) IS NOT NEW.company_id;
+        SELECT RAISE(ABORT, 'category belongs to a different company')
+          WHERE NEW.category_id IS NOT NULL AND (SELECT company_id FROM category WHERE id = NEW.category_id) IS NOT NEW.company_id;
+      END;
+      CREATE TRIGGER draft_checks_update BEFORE UPDATE ON receipt_draft
+      BEGIN
+        SELECT RAISE(ABORT, 'draft company cannot be changed') WHERE NEW.company_id <> OLD.company_id;
+        SELECT RAISE(ABORT, 'property belongs to a different company')
+          WHERE NEW.property_id IS NOT NULL AND (SELECT company_id FROM property WHERE id = NEW.property_id) IS NOT NEW.company_id;
+        SELECT RAISE(ABORT, 'category belongs to a different company')
+          WHERE NEW.category_id IS NOT NULL AND (SELECT company_id FROM category WHERE id = NEW.category_id) IS NOT NEW.company_id;
+        SELECT RAISE(ABORT, 'a saved draft cannot be changed') WHERE OLD.status = 'saved' AND NEW.status <> 'saved';
+      END;
+    `,
+  },
 ];

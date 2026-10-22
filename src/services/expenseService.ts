@@ -87,6 +87,40 @@ export class ExpenseService {
     }
   }
 
+  /**
+   * Posts an expense from a reviewed receipt draft. The files are already in managed storage, so
+   * they become the expense's attachments without being copied again. `inTransaction` lets the
+   * caller complete the draft atomically, so a retry can never post twice.
+   */
+  createFromStored(
+    input: Omit<ExpenseInput, 'stagedFileIds'>,
+    stored: StoredFile[],
+    inTransaction: (expenseId: number, now: string) => void,
+  ): Expense {
+    const existing = this.repo.findByKey(input.idempotencyKey);
+    if (existing !== undefined) return this.mustGet(existing);
+    this.companies.requireActive(input.companyId);
+    const c = this.check(input.companyId, input, null);
+    try {
+      const id = this.db.transaction(() => {
+        const now = this.now();
+        const vendorId = this.repo.vendorId(c.companyId, c.vendorName, now);
+        const expenseId = this.repo.insertExpense({ companyId: c.companyId, propertyId: c.propertyId, vendorId, date: c.date, totalCents: c.totalCents, notes: c.notes, key: input.idempotencyKey }, now);
+        this.repo.replaceAllocations(expenseId, c.lines);
+        this.assertBalanced(expenseId, c.totalCents);
+        for (const f of stored) this.repo.addAttachment(expenseId, f, now);
+        this.repo.addEvent(expenseId, 'created', `Added ${formatCents(c.totalCents)} for ${c.vendorName} from a reviewed receipt`, now);
+        inTransaction(expenseId, now);
+        return expenseId;
+      })();
+      return this.mustGet(id);
+    } catch (err) {
+      const raced = this.repo.findByKey(input.idempotencyKey);
+      if (raced !== undefined) return this.mustGet(raced);
+      throw this.friendly(err);
+    }
+  }
+
   update(id: number, input: ExpenseUpdate): ExpenseDetail {
     const before = this.mustGet(id);
     this.companies.requireActive(before.companyId);

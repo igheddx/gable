@@ -20,6 +20,10 @@ export function CategoriesPage() {
   const [renaming, setRenaming] = useState<Category | null>(null);
   const [newName, setNewName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const { data: rules, reload: reloadRules } = useLoad(() => (companyId ? unwrap(api().listVendorRules(companyId)) : Promise.resolve([])), [companyId]);
+  const [ruleVendor, setRuleVendor] = useState('');
+  const [ruleCategory, setRuleCategory] = useState('');
+  const [ruleError, setRuleError] = useState<string | null>(null);
   const [regroup, setRegroup] = useState<{ cat: Category; to: ReportingGroup } | null>(null);
 
   const act = async (fn: () => Promise<unknown>, ok: string): Promise<boolean> => {
@@ -100,6 +104,42 @@ export function CategoriesPage() {
               )}
             </div>
             <label className="check"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /><span>Show archived categories</span></label>
+
+            <h2 className="panel__title">Vendor rules</h2>
+            <p className="muted">A rule tells Gable which category to suggest when a receipt comes from a vendor. Rules are only created here, or when you tick “Remember this vendor’s category” while saving a receipt. You can always change the category on a receipt.</p>
+            <form className="panel add-category" noValidate onSubmit={(e) => {
+              e.preventDefault();
+              setRuleError(null);
+              void unwrap(api().createVendorRule(companyId, ruleVendor, Number(ruleCategory)))
+                .then(() => { setRuleVendor(''); setRuleCategory(''); reloadRules(); toast('Rule added.'); })
+                .catch((err) => setRuleError(err instanceof ApiError ? (err.fields.vendorName ?? err.message) : errorMessage(err)));
+            }}>
+              <TextField label="Vendor name" value={ruleVendor} onChange={(e) => { setRuleVendor(e.target.value); setRuleError(null); }} error={ruleError} maxLength={160} placeholder="For example: Harbor Lumber & Supply" />
+              <SelectField label="Suggest this category" value={ruleCategory} onChange={(e) => setRuleCategory(e.target.value)}>
+                <option value="">Choose a category…</option>
+                {(data ?? []).filter((c) => !c.isArchived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </SelectField>
+              <Button variant="primary" type="submit" disabled={!ruleVendor.trim() || !ruleCategory} icon={<Plus size={16} aria-hidden="true" />}>Add rule</Button>
+            </form>
+            <div className="panel panel--flush">
+              {(rules ?? []).length === 0 ? <EmptyState title="No vendor rules">Suggestions then come from keywords only, and you choose the category.</EmptyState> : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <caption className="sr-only">Vendor rules</caption>
+                    <thead><tr><th scope="col">Vendor</th><th scope="col">Suggested category</th><th scope="col" className="is-right">Actions</th></tr></thead>
+                    <tbody>
+                      {(rules ?? []).map((r) => (
+                        <tr key={r.id}>
+                          <td className="table__primary">{r.vendorName}</td>
+                          <td>{r.categoryName}</td>
+                          <td className="is-right"><Button size="sm" variant="ghost" aria-label={`Remove the rule for ${r.vendorName}`} onClick={() => void act(async () => { await unwrap(api().deleteVendorRule(r.id)); reloadRules(); }, 'Rule removed.')}>Remove</Button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

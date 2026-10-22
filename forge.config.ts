@@ -2,42 +2,59 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { VitePlugin } from '@electron-forge/plugin-vite';
-import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Native/runtime modules the Vite bundle leaves external. Copied into the package with their dependencies. */
-const EXTERNAL_RUNTIME_MODULES = ['better-sqlite3'];
+/**
+ * Modules the Vite bundles leave external. They are copied into the package with their dependencies,
+ * and unpacked from the asar archive so worker threads and native code can load them from disk.
+ */
+const EXTERNAL_RUNTIME_MODULES = ['better-sqlite3', 'tesseract.js', 'tesseract.js-core', '@tesseract.js-data/eng', 'pdfjs-dist', '@napi-rs/canvas'];
 
-function copyModuleTree(
-  projectDir: string,
-  buildPath: string,
-  name: string,
-  seen: Set<string>,
-  target: string,
-): void {
+/** What to copy from each module. Large packages are trimmed to the files the app actually loads. */
+function shouldCopy(name: string, rel: string, target: string): boolean {
+  const r = rel.replace(/\\/g, '/').replace(/^\//, '');
+  if (r === '') return true;
+  switch (name) {
+    case 'better-sqlite3':
+      // Skip C/C++ sources and the SQLite amalgamation; ship only the prebuilt binary for this platform.
+      if (/^(deps|src|build)(\/|$)/.test(r)) return false;
+      return !(/^prebuilds\/.+\.node$/.test(r) && !r.endsWith(`${target}.node`));
+    case 'pdfjs-dist':
+      return r === 'package.json' || r === 'LICENSE' || /^legacy(\/build(\/(pdf|pdf\.worker)\.mjs)?)?$/.test(r) || /^(standard_fonts|wasm)(\/|$)/.test(r);
+    case '@tesseract.js-data/eng':
+      return r === 'package.json' || r === 'index.js' || /^4\.0\.0_best_int(\/|$)/.test(r);
+    case 'tesseract.js':
+      return !/^(dist|docs|examples|scripts)(\/|$)/.test(r);
+    default:
+      return true;
+  }
+}
+
+function copyModuleTree(projectDir: string, buildPath: string, name: string, seen: Set<string>, target: string): void {
   if (seen.has(name)) return;
-  seen.add(name);
   const src = path.join(projectDir, 'node_modules', name);
+  if (!fs.existsSync(src)) return; // an optional dependency for another platform
+  seen.add(name);
   const dest = path.join(buildPath, 'node_modules', name);
-  // Skip C/C++ sources and the bundled SQLite amalgamation; keep JS and the .node prebuilds.
   fs.cpSync(src, dest, {
     recursive: true,
-    filter: (f) => {
-      const rel = f.slice(src.length);
-      if (/[\\/](deps|src|build)([\\/]|$)/.test(rel)) return false;
-      // Ship only the prebuilt binary for the platform/arch being packaged.
-      return !(/[\\/]prebuilds[\\/].+\.node$/.test(rel) && !rel.endsWith(`${target}.node`));
-    },
+    filter: (f) => shouldCopy(name, f.slice(src.length), target),
   });
   const pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8')) as {
     dependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
   };
-  // better-sqlite3 lists node-addon-api only for compiling; not needed at runtime.
+  const [platform = '', arch = ''] = target.split('-');
+  // better-sqlite3 lists node-addon-api only for compiling; it is not needed at runtime.
   for (const dep of Object.keys(pkg.dependencies ?? {})) {
-    if (dep !== 'node-addon-api') copyModuleTree(projectDir, buildPath, dep, seen, target);
+    if (dep !== 'node-addon-api' && dep !== 'opencollective-postinstall') copyModuleTree(projectDir, buildPath, dep, seen, target);
+  }
+  // Per-platform native packages (for example @napi-rs/canvas-win32-x64-msvc): only this platform's is installed and copied.
+  for (const dep of Object.keys(pkg.optionalDependencies ?? {})) {
+    if (dep.includes(`-${platform}-${arch}`)) copyModuleTree(projectDir, buildPath, dep, seen, target);
   }
 }
 
@@ -49,7 +66,8 @@ const config: ForgeConfig = {
     name: 'Gable',
     executableName: 'Gable',
     appBundleId: 'com.gable.app',
-    asar: { unpack: '**/*.node' },
+    // Native addons, the OCR engine with its WASM and language data, and the worker script must be real files on disk.
+    asar: { unpack: '{**/*.node,**/node_modules/**,**/.vite/build/ocrWorker.cjs}' },
     // Keep only the Vite output plus the external native modules (added in packageAfterCopy).
     ignore: (file: string) => !!file && !file.startsWith('/.vite') && file !== '/package.json',
   },
@@ -72,10 +90,10 @@ const config: ForgeConfig = {
       build: [
         { entry: 'src/main/main.ts', config: 'vite.main.config.mts', target: 'main' },
         { entry: 'src/preload/preload.ts', config: 'vite.preload.config.mts', target: 'preload' },
+        { entry: 'src/workers/ocrWorker.ts', config: 'vite.worker.config.mts', target: 'main' },
       ],
       renderer: [{ name: 'main_window', config: 'vite.renderer.config.mts' }],
     }),
-    new AutoUnpackNativesPlugin({}),
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,

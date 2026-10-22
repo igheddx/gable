@@ -14,14 +14,13 @@ const iso = (t: string): string | null => {
 };
 
 export function ExpensesPage() {
-  const { navigate, scope, companyName, receipts } = useApp();
+  const { navigate, scope, companyName } = useApp();
   const [f, setF] = useState({ q: '', category: '', property: '', from: '', to: '', voided: false });
   const [page, setPage] = useState(1);
   const q = useDebounced(f.q, 250);
   const active = Boolean(f.q || f.category || f.property || f.from || f.to || f.voided);
   const change = (patch: Partial<typeof f>) => { setF((x) => ({ ...x, ...patch })); setPage(1); };
   const clear = () => { setF({ q: '', category: '', property: '', from: '', to: '', voided: false }); setPage(1); };
-  const waiting = receipts.filter((r) => r.status === 'Needs review' || r.status === 'Failed').length;
 
   const query: ExpenseQuery = useMemo(() => ({
     scope, q, property: f.property === '' ? null : f.property === 'general' ? 'general' : Number(f.property),
@@ -29,6 +28,8 @@ export function ExpensesPage() {
   }), [scope, q, f.property, f.category, f.from, f.to, f.voided, page]);
 
   const { data, error, loading, reload } = useLoad(() => unwrap(api().listExpenses(query)), [JSON.stringify(query)]);
+  const { data: queue } = useLoad(() => unwrap(api().listReceipts({ scope })), [scope]);
+  const waiting = (queue ?? []).filter((d) => ['needs_review', 'reviewed', 'failed', 'queued', 'processing'].includes(d.status)).length;
   const { data: cats } = useLoad(() => (scope === 'all' ? Promise.resolve([]) : unwrap(api().listCategories(scope, true))), [scope]);
   const { data: props } = useLoad(() => (scope === 'all' ? Promise.resolve(null) : unwrap(api().listProperties({ scope, pageSize: 100, includeArchived: true }))), [scope]);
 

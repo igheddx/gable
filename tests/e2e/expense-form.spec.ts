@@ -17,7 +17,7 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => {
   await app.close();
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 const vendor = () => page.getByRole('combobox', { name: 'Vendor' });

@@ -30,7 +30,7 @@ for (const size of [{ name: '1280x800-100', w: 1280, h: 800 }, { name: '1366x768
     await expect(page.getByRole('heading', { name: 'Welcome to Gable' })).toBeVisible();
     await shot(page, 's3-setup-company');
     await app.close();
-    fs.rmSync(first, { recursive: true, force: true });
+    fs.rmSync(first, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 
     const dir = demoDir();
     ({ app, page } = await open(dir));
@@ -68,6 +68,6 @@ for (const size of [{ name: '1280x800-100', w: 1280, h: 800 }, { name: '1366x768
     await page.getByRole('button', { name: 'Archive Cedar Homes LLC' }).click();
     await shot(page, 's3-archive-default-dialog');
     await app.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
   });
 }

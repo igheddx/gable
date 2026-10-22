@@ -30,7 +30,7 @@ test('first run: create the first company, then the first property', async () =>
   await go(page, '/properties');
   await expect(page.getByRole('link', { name: '12 Maple Row' })).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('default company opens on launch, and switching never changes the default', async () => {
@@ -45,7 +45,7 @@ test('default company opens on launch, and switching never changes the default',
   page = await app.firstWindow();
   await expect(page.locator('#company-switcher option:checked')).toHaveText('Cedar Homes LLC (default)');
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('search is scoped per company and labeled in All Companies', async () => {
@@ -74,7 +74,7 @@ test('search is scoped per company and labeled in All Companies', async () => {
   await page.getByRole('button', { name: 'Clear filters' }).first().click();
   await expect(page.getByRole('link', { name: '125 Oak Drive' })).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('property validation: sale before purchase is rejected; reopening a sale is confirmed', async () => {
@@ -102,7 +102,7 @@ test('property validation: sale before purchase is rejected; reopening a sale is
   await expect(page.getByText('Not sold')).toBeVisible();
   await expect(page.getByText('Held to date')).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('archiving the default company requires choosing a replacement', async () => {
@@ -124,7 +124,7 @@ test('archiving the default company requires choosing a replacement', async () =
   await page.getByRole('button', { name: 'Restore Cedar Homes LLC' }).click();
   await expect(page.locator('#company-switcher option', { hasText: 'Cedar Homes LLC' })).toHaveCount(1);
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('adding a property from All Companies requires choosing the company first', async () => {
@@ -139,7 +139,7 @@ test('adding a property from All Companies requires choosing the company first',
   await page.locator('main').getByRole('combobox', { name: /^Company/ }).selectOption({ label: 'North Property LLC' });
   await expect(page.locator('.static-value')).toHaveText('North Property LLC');
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test("a company's expense form only offers that company's properties", async () => {
@@ -153,5 +153,5 @@ test("a company's expense form only offers that company's properties", async () 
   await expect(page.getByRole('option', { name: /17 Oak Hollow/ })).toHaveCount(0);
   await expect(page.getByRole('option', { name: /310 Cedar Ridge/ })).toHaveCount(0);
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });

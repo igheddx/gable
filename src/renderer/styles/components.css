@@ -114,3 +114,6 @@ dialog.dialog::backdrop { background: rgb(24 39 36 / 45%); }
 .disclosure[open] > summary svg { transform: rotate(90deg); }
 .disclosure > summary svg { transition: transform var(--dur-fast) var(--ease); }
 .disclosure__body { padding-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-4); }
+
+dialog.dialog--wide { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+dialog.dialog--wide .dialog__body { max-height: calc(100vh - 200px); overflow: auto; }

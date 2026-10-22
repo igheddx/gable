@@ -57,6 +57,16 @@ export class ReceiptFiles {
     return { storedName, originalName: meta.name, sha256: meta.sha256, sizeBytes: meta.size, mime: meta.mime };
   }
 
+  /** Details of a staged file, for callers that need its path and type before promoting it. */
+  stagedInfo(stagedId: string): { path: string; mime: string; name: string; sha256: string; sizeBytes: number } {
+    if (!/^[0-9a-f]{32}$/.test(stagedId)) throw new AppError('VALIDATION', 'A receipt file is no longer available. Add it again.');
+    const metaPath = path.join(this.stagingDir, `${stagedId}.json`);
+    const bin = path.join(this.stagingDir, `${stagedId}.bin`);
+    if (!fs.existsSync(metaPath) || !fs.existsSync(bin)) throw new AppError('VALIDATION', 'A receipt file is no longer available. Add it again.');
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as Meta;
+    return { path: bin, mime: meta.mime, name: meta.name, sha256: meta.sha256, sizeBytes: meta.size };
+  }
+
   discardStaged(stagedId: string): void {
     if (!/^[0-9a-f]{32}$/.test(stagedId)) return;
     fs.rmSync(path.join(this.stagingDir, `${stagedId}.bin`), { force: true });

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { InlineExecutor } from '../../src/services/ocr/executors';
+import { InlineExecutor } from '../../src/services/ocr/inlineExecutor';
 import { missingOcrResources, resolveOcrResources } from '../../src/services/ocr/resources';
 import { OcrFileError, type FileRef } from '../../src/services/ocr/types';
 import { parseReceiptText } from '../../src/shared/receiptParser';

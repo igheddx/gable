@@ -16,6 +16,7 @@ export function resolveOcrResources(opts: { isPackaged: boolean; resourcesPath: 
     langPath: path.join(nm, '@tesseract.js-data', 'eng', '4.0.0_best_int'),
     pdfjsPath: path.join(nm, 'pdfjs-dist', 'legacy', 'build', 'pdf.mjs'),
     standardFontsDir: path.join(nm, 'pdfjs-dist', 'standard_fonts'),
+    pdfjsWasmDir: path.join(nm, 'pdfjs-dist', 'wasm'),
   };
   return res;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 interface Props {
   open: boolean;
@@ -6,12 +6,14 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   actions: ReactNode;
+  wide?: boolean;
 }
 
 /** Native <dialog>: modal, focus trapped, Escape closes, focus returns to the opener. */
-export function Dialog({ open, title, onClose, children, actions }: Props) {
+export function Dialog({ open, title, onClose, children, actions, wide }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const opener = useRef<Element | null>(null);
+  const titleId = useId(); // several dialogs can exist on one page; each needs its own label id
 
   useEffect(() => {
     const d = ref.current;
@@ -27,8 +29,8 @@ export function Dialog({ open, title, onClose, children, actions }: Props) {
   return (
     <dialog
       ref={ref}
-      className="dialog"
-      aria-labelledby="dialog-title"
+      className={`dialog${wide ? ' dialog--wide' : ''}`}
+      aria-labelledby={titleId}
       onClose={() => {
         (opener.current as HTMLElement | null)?.focus?.();
         onClose();
@@ -39,7 +41,7 @@ export function Dialog({ open, title, onClose, children, actions }: Props) {
       }}
     >
       <div className="dialog__body">
-        <h2 className="dialog__title" id="dialog-title">{title}</h2>
+        <h2 className="dialog__title" id={titleId}>{title}</h2>
         {children}
       </div>
       <div className="dialog__actions">{actions}</div>

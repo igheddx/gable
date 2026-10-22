@@ -8,6 +8,8 @@ import { ExpenseService } from '../../src/services/expenseService';
 import { FinancialService } from '../../src/services/financialService';
 import { PropertyService } from '../../src/services/propertyService';
 import { ReceiptFiles } from '../../src/services/receiptFiles';
+import { ReceiptService } from '../../src/services/receiptService';
+import { FakeOcr } from './fakeOcr';
 import type { ExpenseInput, PropertyFields } from '../../src/shared/schemas';
 
 export interface Stack {
@@ -19,6 +21,8 @@ export interface Stack {
   expenses: ExpenseService;
   financials: FinancialService;
   files: ReceiptFiles;
+  receipts: ReceiptService;
+  ocr: FakeOcr;
   receiptsDir: string;
   /** Category id by name for a company (starter categories are seeded on company creation). */
   cat: (companyId: number, name: string) => number;
@@ -38,8 +42,10 @@ export function makeStack(): Stack {
   const files = new ReceiptFiles(receiptsDir, path.join(dir, 'staging'));
   const expenses = new ExpenseService(db, companies, files);
   const financials = new FinancialService(db, () => TODAY);
+  const ocr = new FakeOcr();
+  const receipts = new ReceiptService(db, companies, expenses, files, ocr, { concurrency: 2, today: () => TODAY });
   const stack: Stack = {
-    dir, db, companies, properties, categories, expenses, financials, files, receiptsDir,
+    dir, db, companies, properties, categories, expenses, financials, files, receipts, ocr, receiptsDir,
     cat: (companyId, name) => {
       const c = categories.list(companyId, true).find((x) => x.name === name);
       if (!c) throw new Error(`no category ${name}`);

@@ -10,6 +10,11 @@ import { CategoryService } from '../services/categoryService';
 import { ExpenseService } from '../services/expenseService';
 import { FinancialService } from '../services/financialService';
 import { ReceiptFiles } from '../services/receiptFiles';
+import { ReceiptService } from '../services/receiptService';
+import { ThreadPoolExecutor } from '../services/ocr/executors';
+import { missingOcrResources, resolveOcrResources } from '../services/ocr/resources';
+import { RECEIPT_EVENT_CHANNEL } from '../shared/ipc';
+import os from 'node:os';
 import { chooseUserDataDir, resolveDataPaths } from '../platform/paths';
 import { isTrustedSender, registerIpc } from './ipc';
 
@@ -41,6 +46,7 @@ const CSP = DEV_URL
 
 let mainWindow: BrowserWindow | null = null;
 let db: Db | null = null;
+let ocr: ThreadPoolExecutor | null = null;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -106,17 +112,42 @@ if (!app.requestSingleInstanceLock()) {
     }
     db = openDatabase(paths.database);
     const companies = new CompanyService(db, paths.logos);
+    const files = new ReceiptFiles(paths.receipts, paths.staging);
+    const expenses = new ExpenseService(db, companies, files);
+
+    // Receipt reading runs in worker threads, never on the main thread. Everything it needs ships with the app.
+    const resources = resolveOcrResources({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, projectDir: process.cwd() });
+    const missing = missingOcrResources(resources);
+    if (missing.length) console.error('[ocr] bundled files missing:', missing.join(', '));
+    // Worker files must be real files on disk, so a packaged build runs them from the unpacked folder.
+    const workerFile = path.join(__dirname, 'ocrWorker.cjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+    ocr = new ThreadPoolExecutor(workerFile, resources, Math.max(1, Math.min(2, os.cpus().length - 1)));
+    const receipts = new ReceiptService(db, companies, expenses, files, ocr, { concurrency: 2 });
+    receipts.onEvent((e) => {
+      for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(RECEIPT_EVENT_CHANNEL, e);
+    });
+    receipts.recoverInterrupted();
+
     registerIpc(
       {
         app: new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
         companies,
         properties: new PropertyService(db, companies),
         categories: new CategoryService(db, companies),
-        expenses: new ExpenseService(db, companies, new ReceiptFiles(paths.receipts, paths.staging)),
+        expenses,
         financials: new FinancialService(db),
+        receipts,
       },
       {
         openFile: (p) => shell.openPath(p),
+        chooseReceiptFiles: async () => {
+          const r = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+            title: 'Choose receipts',
+            properties: ['openFile', 'multiSelections'],
+            filters: [{ name: 'Receipts (JPG, PNG, PDF)', extensions: ['jpg', 'jpeg', 'png', 'pdf'] }],
+          });
+          return r.canceled ? [] : r.filePaths;
+        },
         chooseImageFile: async () => {
           const r = await dialog.showOpenDialog(mainWindow ?? undefined!, {
             title: 'Choose a company logo',
@@ -139,6 +170,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit();
   });
   app.on('before-quit', () => {
+    void ocr?.shutdown();
     db?.close();
     db = null;
   });

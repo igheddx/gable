@@ -9,7 +9,7 @@ test.beforeEach(() => {
   dataDir = tempDir('e2e');
 });
 test.afterEach(() => {
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('opens, initializes the database, and reports app info over IPC', async () => {
@@ -17,7 +17,7 @@ test('opens, initializes the database, and reports app info over IPC', async () 
   const page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'Welcome to Gable' })).toBeVisible(); // first run: no companies yet
   const info = await page.evaluate(() => (window as any).gable.getAppInfo());
-  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 3 } });
+  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 4 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
   await app.close();
 });
@@ -38,7 +38,10 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
       'setDefaultCompany', 'setSetting', 'updateCompany', 'updateProperty'].concat(
       ['archiveCategory', 'createCategory', 'createExpense', 'getExpense', 'getPropertyFinancials', 'listCategories', 'listExpenses',
         'openReceipt', 'renameCategory', 'restoreCategory', 'setCategoryGroup', 'stageReceiptFile', 'suggestVendors', 'unvoidExpense',
-        'updateExpense', 'voidExpense']).sort(),
+        'updateExpense', 'voidExpense',
+        'cancelReceipt', 'createVendorRule', 'deleteVendorRule', 'getReceipt', 'importReceipts', 'listReceipts', 'listVendorRules',
+        'markReceiptReviewed', 'onReceiptEvent', 'pickReceiptFiles', 'postReceipt', 'postReviewedReceipts', 'previewReceipt',
+        'removeReceipt', 'retryReceipt', 'skipReceipt', 'unskipReceipt', 'updateReceipt']).sort(),
   );
   // Task-specific methods only: nothing that takes a SQL string, a file path, or a channel name.
   expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|(?<!stageReceipt)file(?!s)/i.test(k))).toBe(false);

@@ -60,6 +60,7 @@ export class OcrPipeline {
     const task = lib.getDocument({
       data, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0,
       standardFontDataUrl: this.res.standardFontsDir.replace(/[\\/]*$/, '/'),
+      wasmUrl: this.res.pdfjsWasmDir.replace(/[\\/]*$/, '/'),
     });
     try {
       const doc = await task.promise;

@@ -15,7 +15,7 @@ Last updated: 2026-10-22
 | 2 | Design system + expense screen | Mac verified; owner visual review pending | Visual approval |
 | 3 | Companies, properties, search | Mac verified | |
 | 4 | Manual expenses, totals | Mac verified | Totals reconcile |
-| 5 | Receipts + OCR | Not started | Saves time |
+| 5 | Receipts + OCR | Mac verified; Windows CI pending | Saves time |
 | 6 | Dashboard, reports, exports | Not started | Exports reconcile |
 | 7 | Backup, restore, migrations | Not started | Full restore works |
 | 8 | QA + Windows RC | Not started | |
@@ -61,6 +61,32 @@ Last updated: 2026-10-22
 - Fixture B "2026 expenses are $20,000" matches commission + seller closing.
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
+
+## Windows CI evidence (GitHub Actions `windows-latest`)
+
+Run for commit `173ef9c` (all of Stages 1 to 4 plus the OCR libraries): **success** on Windows x64 and macOS. Steps passed on Windows: `npm ci`, typecheck, lint, unit tests, `npm run test:e2e` (package, then Playwright against the packaged `Gable.exe`), and `make:win` (Squirrel installer uploaded as an artifact). Earlier runs failed for real portability bugs that were fixed: a path-semantics unit test, a test helper leaving a SQLite file open (EBUSY), and `VAR=1 cmd` npm scripts (now `cross-env`).
+Still NOT done for Windows: installing the installer on a clean machine, running it as a standard non-admin user, native dialogs, real display scaling, and a human walkthrough. A green CI run is not a clean-machine test and the installer is unsigned.
+
+## Stage 5 evidence (2026-10-22, macOS)
+
+| Check | Result |
+| --- | --- |
+| Unit/integration | PASS: 168 tests (parser 14, OCR pipeline 13 with real Tesseract, receipt service 26 with a stand-in reader) |
+| Packaged-app E2E | PASS: 35 tests, including real OCR in worker threads from the packaged app (clean photo, sideways photo, digital PDF text layer, scanned PDF, ambiguous total, mixed batch with corrupt/encrypted/31-page files reported individually, Save All Reviewed, duplicate warning and override, restart persistence, keep-my-edits retry, split save) |
+| Offline | The engine, WASM core and English language data ship in the app and are loaded from disk (`langPath`, `corePath`, `workerPath`; `cacheMethod: none`); all bundled files are checked present at start. The packaged tests ran with them. Disconnecting the network and re-running was NOT done. |
+| Measured speed (this Intel Mac, not a promise) | Packaged app: clean 640 px PNG from "Add" to "Needs review" about 1.5 s. Node tests per file are logged by `npm test` ("OCR timings"). |
+| Accuracy | Not measured and not promised. Suggestions are always shown as Needs review. Reading confidence is informational only. |
+
+Stage 5 design decisions and limits:
+- Reading runs in a pool of at most 2 worker threads (fewer on small machines), never on the main thread. Cancelling a read stops that thread; a restart re-queues interrupted reads.
+- PDFs: a text layer is used when a page has at least 40 characters, otherwise the page is rendered locally and read. A PDF is always one receipt; several images can be combined as one receipt. Limits: 25 MB per file, 30 pages per PDF, first 10 scanned pages read (the rest flagged).
+- Suggestions: vendor from the first plausible line (exact match to a known vendor preferred, never fuzzy), date (US order; due/expiry lines ignored), total (labeled totals only: "total due", "amount due", "total"; subtotal, tax, tendered, change, tip ignored; two different labeled totals are flagged ambiguous with both offered). No label means the largest amount is offered as a flagged guess.
+- Category: explicit vendor rule (exact on a key that ignores store numbers), then a small keyword list, otherwise left blank. Rules are created only on the Categories page or by ticking "Remember this vendor's category" (off by default).
+- Duplicates: identical file content (against saved expenses and other queued receipts, same company only) and same vendor, date and total as a saved expense. Always overridable.
+- Posting is idempotent (a posting token per receipt). "Save all reviewed" reports each failure and a retry never duplicates.
+- Not built: HEIC (rejected with guidance), per-line-item extraction, languages other than English, handwriting.
+- The 20-document batch is covered with a stand-in reader in unit tests (14 good, 3 corrupt, 3 unreadable; concurrency bounded). The packaged-app batch used 8 real files, not 20; 20 real documents were not run.
+- Windows packaging of the OCR (native canvas, worker thread from the unpacked folder, language data) is untested until CI runs.
 
 ## Stage 4 evidence (2026-10-22)
 

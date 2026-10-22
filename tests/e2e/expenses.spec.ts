@@ -35,7 +35,7 @@ test('standard project: cost $268,000, profit $42,000, ROI 15.67%; general overh
   await go(page, '/expenses');
   await expect(page.getByRole('row', { name: /Northfield Insurance.*General company.*\$1,000\.00/ })).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('historical project: 2021 to 2026 annual breakdown, commissions listed separately, duration', async () => {
@@ -63,7 +63,7 @@ test('historical project: 2021 to 2026 annual breakdown, commissions listed sepa
   await expect(detail.getByRole('row', { name: /Seller closing costs \$5,000\.00/ })).toBeVisible();
   await expect(detail.getByText('Summit Title & Closing').first()).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('unsold property shows investment to date, with no profit or ROI', async () => {
@@ -78,7 +78,7 @@ test('unsold property shows investment to date, with no profit or ROI', async ()
   await expect(summary).not.toContainText('%');
   await expect(page.getByText('Held to date')).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('add an expense with a receipt from a property; it counts in the right year, survives restart, edits and voids recalculate', async () => {
@@ -147,7 +147,7 @@ test('add an expense with a receipt from a property; it counts in the right year
   await page.getByRole('link', { name: '48 Willow Court' }).click();
   await expect(page.getByRole('region', { name: 'Lifetime summary' })).toContainText('$192,042.50');
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('a double click on Save creates exactly one expense', async () => {
@@ -168,7 +168,7 @@ test('a double click on Save creates exactly one expense', async () => {
   const after = await page.getByRole('status').filter({ hasText: /expenses?$/ }).first().innerText();
   expect(Number(after.split(' ')[0])).toBe(Number(before.split(' ')[0]) + 1);
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('categories: add, rename, remap needs confirmation, archive; archived are not offered on new expenses', async () => {
@@ -201,7 +201,7 @@ test('categories: add, rename, remap needs confirmation, archive; archived are n
   await expect(page.getByRole('option', { name: 'Materials' })).toBeVisible();
   await expect(page.getByRole('option', { name: /Dumpster/ })).toHaveCount(0);
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('expense list filters work together and are scoped to the company', async () => {
@@ -221,7 +221,7 @@ test('expense list filters work together and are scoped to the company', async (
   await expect(page.getByRole('link', { name: 'Keystone Plumbing Co.' }).first()).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Company' })).toBeVisible();
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('receipts are stored by Gable: the originals can be deleted afterwards', async () => {
@@ -243,5 +243,5 @@ test('receipts are stored by Gable: the originals can be deleted afterwards', as
   expect(files[0]).toMatch(/^[0-9a-f]{32}\.png$/); // opaque name, not "original.png"
   expect(fs.readFileSync(path.join(receipts, files[0]!)).equals(PNG)).toBe(true);
   await app.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { GableApi } from '../shared/ipc';
+import { RECEIPT_EVENT_CHANNEL, type GableApi } from '../shared/ipc';
+import type { ReceiptEvent } from '../shared/types';
 
 const call = (channel: string, payload?: unknown) => ipcRenderer.invoke(channel, payload);
 
@@ -42,6 +43,30 @@ const api: GableApi = {
   getExpense: (id) => call('expenses:get', { id }),
   suggestVendors: (companyId, prefix) => call('expenses:vendorSuggestions', { companyId, prefix }),
   openReceipt: (id) => call('expenses:openAttachment', { id }),
+
+  pickReceiptFiles: () => call('receipts:pickFiles'),
+  importReceipts: (companyId, propertyId, groups) => call('receipts:import', { companyId, propertyId, groups }),
+  listReceipts: (query) => call('receipts:list', query),
+  getReceipt: (id) => call('receipts:get', { id }),
+  updateReceipt: (id, patch) => call('receipts:update', { id, patch }),
+  markReceiptReviewed: (id, reviewed) => call('receipts:markReviewed', { id, reviewed }),
+  postReceipt: (id) => call('receipts:post', { id }),
+  postReviewedReceipts: (scope) => call('receipts:postReviewed', { scope }),
+  skipReceipt: (id) => call('receipts:skip', { id }),
+  unskipReceipt: (id) => call('receipts:unskip', { id }),
+  removeReceipt: (id) => call('receipts:remove', { id }),
+  retryReceipt: (id, overwriteEdited = false) => call('receipts:retry', { id, overwriteEdited }),
+  cancelReceipt: (id) => call('receipts:cancel', { id }),
+  previewReceipt: (id, page) => call('receipts:preview', { id, page }),
+  onReceiptEvent: (cb) => {
+    const listener = (_e: unknown, payload: ReceiptEvent) => cb(payload);
+    ipcRenderer.on(RECEIPT_EVENT_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(RECEIPT_EVENT_CHANNEL, listener);
+  },
+
+  listVendorRules: (companyId) => call('vendorRules:list', { companyId }),
+  createVendorRule: (companyId, vendorName, categoryId) => call('vendorRules:create', { companyId, vendorName, categoryId }),
+  deleteVendorRule: (id) => call('vendorRules:delete', { id }),
 };
 
 contextBridge.exposeInMainWorld('gable', api);

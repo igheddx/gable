@@ -108,3 +108,28 @@ export const expenseQuerySchema = z
   })
   .strict();
 export type ExpenseQuery = z.input<typeof expenseQuerySchema>;
+
+// ---------- Receipt drafts ----------
+export const draftPatchSchema = z
+  .object({
+    vendor: text(160).optional(),
+    expenseDate: isoDate.nullable().optional(),
+    totalCents: z.number().int().min(1).max(MAX_CENTS).nullable().optional(),
+    categoryId: z.number().int().positive().nullable().optional(),
+    split: z.boolean().optional(),
+    allocations: z.array(allocationInputSchema).max(20).optional(),
+    propertyId: z.number().int().positive().nullable().optional(),
+    notes: text(5000).optional(),
+    rememberVendor: z.boolean().optional(),
+    duplicateOverride: z.boolean().optional(),
+  })
+  .strict();
+export type DraftPatch = z.input<typeof draftPatchSchema>;
+
+export const draftQuerySchema = z
+  .object({
+    scope: z.union([z.number().int().positive(), z.literal('all')]),
+    includeSaved: z.boolean().default(false),
+  })
+  .strict();
+export type DraftQuery = z.input<typeof draftQuerySchema>;

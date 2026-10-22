@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { categoryInputSchema, companyInputSchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
-import type { Category, Company, Expense, ExpenseDetail, ExpensePage, Property, PropertyFinancials, PropertyPage, StagedFile } from './types';
+import { categoryInputSchema, companyInputSchema, draftPatchSchema, draftQuerySchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
+import type { Category, Company, Expense, ExpenseDetail, ExpensePage, ImportResult, PostAllResult, Property, PropertyFinancials, PropertyPage, ReceiptDraft, ReceiptDraftDetail, ReceiptEvent, StagedFile, VendorRule } from './types';
 
 /**
  * The complete renderer-to-main contract. Every channel has an input schema; the main
@@ -59,7 +59,31 @@ export const ipcContract = {
   'expenses:get': { input: z.object({ id }).strict() },
   'expenses:vendorSuggestions': { input: z.object({ companyId: id, prefix: z.string().max(100) }).strict() },
   'expenses:openAttachment': { input: z.object({ id }).strict() },
+
+  'receipts:pickFiles': { input: z.undefined() },
+  'receipts:import': {
+    input: z.object({ companyId: id, propertyId: id.nullable(), groups: z.array(z.array(z.string().regex(/^[0-9a-f]{32}$/)).min(1).max(20)).min(1).max(50) }).strict(),
+  },
+  'receipts:list': { input: draftQuerySchema },
+  'receipts:get': { input: z.object({ id }).strict() },
+  'receipts:update': { input: z.object({ id, patch: draftPatchSchema }).strict() },
+  'receipts:markReviewed': { input: z.object({ id, reviewed: z.boolean() }).strict() },
+  'receipts:post': { input: z.object({ id }).strict() },
+  'receipts:postReviewed': { input: z.object({ scope: z.union([id, z.literal('all')]) }).strict() },
+  'receipts:skip': { input: z.object({ id }).strict() },
+  'receipts:unskip': { input: z.object({ id }).strict() },
+  'receipts:remove': { input: z.object({ id }).strict() },
+  'receipts:retry': { input: z.object({ id, overwriteEdited: z.boolean().default(false) }).strict() },
+  'receipts:cancel': { input: z.object({ id }).strict() },
+  'receipts:preview': { input: z.object({ id, page: z.number().int().min(1).max(200) }).strict() },
+
+  'vendorRules:list': { input: z.object({ companyId: id }).strict() },
+  'vendorRules:create': { input: z.object({ companyId: id, vendorName: z.string().trim().min(1).max(160), categoryId: id }).strict() },
+  'vendorRules:delete': { input: z.object({ id }).strict() },
 } as const;
+
+/** The only channel the main process pushes to the renderer. */
+export const RECEIPT_EVENT_CHANNEL = 'receipts:event';
 
 export type IpcChannel = keyof typeof ipcContract;
 export const IPC_CHANNELS = Object.keys(ipcContract) as IpcChannel[];
@@ -124,4 +148,26 @@ export interface GableApi {
   suggestVendors(companyId: number, prefix: string): R<string[]>;
   /** Opens a stored receipt in the system viewer. */
   openReceipt(attachmentId: number): R<null>;
+
+  /** Native file picker for receipts (JPG, PNG, PDF). Files are validated and staged by the main process. */
+  pickReceiptFiles(): R<{ staged: StagedFile[]; rejected: { name: string; reason: string }[] }>;
+  importReceipts(companyId: number, propertyId: number | null, groups: string[][]): R<ImportResult>;
+  listReceipts(query: z.input<typeof draftQuerySchema>): R<ReceiptDraft[]>;
+  getReceipt(id: number): R<ReceiptDraftDetail>;
+  updateReceipt(id: number, patch: z.input<typeof draftPatchSchema>): R<ReceiptDraft>;
+  markReceiptReviewed(id: number, reviewed: boolean): R<ReceiptDraft>;
+  postReceipt(id: number): R<Expense>;
+  postReviewedReceipts(scope: number | 'all'): R<PostAllResult>;
+  skipReceipt(id: number): R<ReceiptDraft>;
+  unskipReceipt(id: number): R<ReceiptDraft>;
+  removeReceipt(id: number): R<null>;
+  retryReceipt(id: number, overwriteEdited?: boolean): R<ReceiptDraft>;
+  cancelReceipt(id: number): R<null>;
+  previewReceipt(id: number, page: number): R<{ dataUrl: string; pageCount: number }>;
+  /** Subscribe to reading progress. Returns an unsubscribe function. */
+  onReceiptEvent(cb: (e: ReceiptEvent) => void): () => void;
+
+  listVendorRules(companyId: number): R<VendorRule[]>;
+  createVendorRule(companyId: number, vendorName: string, categoryId: number): R<VendorRule[]>;
+  deleteVendorRule(id: number): R<null>;
 }

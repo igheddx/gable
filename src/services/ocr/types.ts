@@ -10,6 +10,8 @@ export interface OcrResources {
   langPath: string;
   pdfjsPath: string;
   standardFontsDir: string;
+  /** pdf.js decoders for JPEG 2000 and similar image formats inside PDFs. */
+  pdfjsWasmDir: string;
 }
 
 export type OcrErrorCode = 'encrypted' | 'corrupt' | 'too_many_pages' | 'unsupported' | 'failed' | 'cancelled' | 'timeout';

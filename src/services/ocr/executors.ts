@@ -1,31 +1,7 @@
 import { Worker } from 'node:worker_threads';
-import { OcrPipeline, handleJob } from './pipeline';
 import { JOB_TIMEOUT_MS, OcrFileError, type JobPayloads, type JobResults, type JobType, type OcrErrorCode, type OcrExecutor, type OcrResources, type Progress } from './types';
 
 type RunOpts = { onProgress?: (p: Progress) => void; signal?: AbortSignal };
-
-/** Runs jobs on the calling thread, one at a time. Used by tests and as a fallback. */
-export class InlineExecutor implements OcrExecutor {
-  private readonly pipeline: OcrPipeline;
-  private chain: Promise<unknown> = Promise.resolve();
-
-  constructor(resources: OcrResources) {
-    this.pipeline = new OcrPipeline(resources);
-  }
-
-  run<T extends JobType>(type: T, payload: JobPayloads[T], opts: RunOpts = {}): Promise<JobResults[T]> {
-    const job = this.chain.then(() => {
-      if (opts.signal?.aborted) throw new OcrFileError('cancelled', 'Reading was cancelled.');
-      return handleJob(this.pipeline, type, payload, opts.onProgress ?? (() => {}));
-    });
-    this.chain = job.catch(() => {});
-    return job;
-  }
-
-  shutdown(): Promise<void> {
-    return this.pipeline.dispose();
-  }
-}
 
 interface Slot { worker: Worker | null; busy: boolean }
 interface Pending { id: number; type: JobType; payload: unknown; opts: RunOpts; resolve: (v: never) => void; reject: (e: Error) => void }
@@ -40,7 +16,7 @@ export class ThreadPoolExecutor implements OcrExecutor {
   private nextId = 1;
   private closed = false;
 
-  constructor(private readonly workerFile: string, private readonly resources: OcrResources, size: number) {
+  constructor(private readonly workerFile: string, private readonly resources: OcrResources, size: number, private readonly execArgv: string[] = []) {
     this.slots = Array.from({ length: Math.max(1, size) }, () => ({ worker: null, busy: false }));
   }
 
@@ -75,7 +51,7 @@ export class ThreadPoolExecutor implements OcrExecutor {
 
   private start(slot: Slot, job: Pending): void {
     slot.busy = true;
-    const worker = slot.worker ?? new Worker(this.workerFile, { workerData: { resources: this.resources } });
+    const worker = slot.worker ?? new Worker(this.workerFile, { workerData: { resources: this.resources }, execArgv: this.execArgv });
     slot.worker = worker;
     let finished = false;
     const finish = (fn: () => void, killWorker: boolean) => {

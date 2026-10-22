@@ -8,6 +8,10 @@ import type { PropertyService } from '../services/propertyService';
 import type { CategoryService } from '../services/categoryService';
 import type { ExpenseService } from '../services/expenseService';
 import type { FinancialService } from '../services/financialService';
+import type { ReceiptService } from '../services/receiptService';
+import fs from 'node:fs';
+import path from 'node:path';
+import { MAX_RECEIPT_BYTES } from '../services/receiptFiles';
 
 type Input<C extends IpcChannel> = z.output<(typeof ipcContract)[C]['input']>;
 type Handlers = { [C in IpcChannel]: (input: Input<C>) => unknown };
@@ -19,6 +23,7 @@ export interface Services {
   categories: CategoryService;
   expenses: ExpenseService;
   financials: FinancialService;
+  receipts: ReceiptService;
 }
 
 export interface Platform {
@@ -26,6 +31,8 @@ export interface Platform {
   chooseImageFile(): Promise<string | null>;
   /** Opens a stored receipt in the OS viewer. Only paths returned by the expense service are passed in. */
   openFile(path: string): Promise<string>;
+  /** Native multi-select picker for receipt files; resolves to chosen paths (empty if cancelled). */
+  chooseReceiptFiles(): Promise<string[]>;
 }
 
 /** Pure so it can be tested without Electron: is this frame our own UI? */
@@ -103,6 +110,37 @@ export function buildHandlers(s: Services, platform: Platform): Handlers {
     'expenses:list': (i) => s.expenses.list(i),
     'expenses:get': (i) => s.expenses.get(i.id),
     'expenses:vendorSuggestions': (i) => s.expenses.suggestVendors(i.companyId, i.prefix),
+    'receipts:pickFiles': async () => {
+      // The renderer never sees paths: the main process reads each chosen file and stages a validated copy.
+      const staged: { stagedId: string; name: string; sizeBytes: number }[] = [];
+      const rejected: { name: string; reason: string }[] = [];
+      for (const p of await platform.chooseReceiptFiles()) {
+        const name = path.basename(p);
+        try {
+          if (fs.statSync(p).size > MAX_RECEIPT_BYTES) { rejected.push({ name, reason: 'This file is larger than 25 MB.' }); continue; }
+          staged.push(s.expenses.stageFile(name, fs.readFileSync(p)));
+        } catch (e) {
+          rejected.push({ name, reason: e instanceof AppError ? e.message.replace(`${name}: `, '') : 'This file could not be read.' });
+        }
+      }
+      return { staged, rejected };
+    },
+    'receipts:import': (i) => s.receipts.importGroups(i.companyId, i.propertyId, i.groups),
+    'receipts:list': (i) => s.receipts.list(i),
+    'receipts:get': (i) => s.receipts.get(i.id),
+    'receipts:update': (i) => s.receipts.update(i.id, i.patch),
+    'receipts:markReviewed': (i) => s.receipts.markReviewed(i.id, i.reviewed),
+    'receipts:post': (i) => s.receipts.post(i.id),
+    'receipts:postReviewed': (i) => s.receipts.postReviewed(i.scope),
+    'receipts:skip': (i) => s.receipts.skip(i.id),
+    'receipts:unskip': (i) => s.receipts.unskip(i.id),
+    'receipts:remove': (i) => { s.receipts.remove(i.id); return null; },
+    'receipts:retry': (i) => s.receipts.retry(i.id, i.overwriteEdited),
+    'receipts:cancel': (i) => { s.receipts.cancel(i.id); return null; },
+    'receipts:preview': (i) => s.receipts.preview(i.id, i.page),
+    'vendorRules:list': (i) => s.receipts.rules(i.companyId),
+    'vendorRules:create': (i) => s.receipts.createRule(i.companyId, i.vendorName, i.categoryId),
+    'vendorRules:delete': (i) => { s.receipts.deleteRule(i.id); return null; },
     'expenses:openAttachment': async (i) => {
       const f = s.expenses.attachmentFile(i.id);
       const err = await platform.openFile(f.path);

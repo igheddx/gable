@@ -76,7 +76,7 @@ for (const size of SIZES) {
     await page.locator('.main').evaluate((el) => { el.scrollTop = 99999; });
     await shot('showcase-bottom');
     await app.close();
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
     expect(fs.readdirSync(out).length).toBeGreaterThan(5);
   });
 }

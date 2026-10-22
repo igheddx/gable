@@ -110,3 +110,57 @@ export interface PropertyFinancials {
   byYear: YearRow[];
   reconciliation: { lifetimeExpensesCents: number; yearsExpensesCents: number; matches: boolean };
 }
+
+export type DraftStatus = 'queued' | 'processing' | 'needs_review' | 'reviewed' | 'failed' | 'skipped' | 'saved';
+
+export interface DraftFile { id: number; name: string; mime: string; sizeBytes: number; pages: number }
+
+export interface DraftDuplicate { kind: 'same_file' | 'possible'; message: string; expenseId?: number; draftId?: number }
+
+export interface DraftSuggestion {
+  vendor: { candidates: string[]; matchedKnown: boolean } | null;
+  date: { candidates: string[]; ambiguous: boolean } | null;
+  total: { candidates: number[]; ambiguous: boolean; labeled: boolean; label: string } | null;
+  category: { categoryId: number; name: string; source: 'rule' | 'keyword'; detail: string } | null;
+}
+
+export interface ReceiptDraft {
+  id: number;
+  companyId: number;
+  companyName: string;
+  propertyId: number | null;
+  propertyAddress: string | null;
+  status: DraftStatus;
+  errorMessage: string | null;
+  vendor: string;
+  expenseDate: string | null;
+  totalCents: number | null;
+  categoryId: number | null;
+  split: boolean;
+  allocations: { categoryId: number; amountCents: number }[];
+  notes: string;
+  rememberVendor: boolean;
+  duplicateOverride: boolean;
+  /** Field names the person has set or corrected. A retry never overwrites these without consent. */
+  touched: string[];
+  suggestion: DraftSuggestion | null;
+  files: DraftFile[];
+  pageCount: number;
+  ocrConfidence: number | null;
+  ocrNotes: string[];
+  duplicates: DraftDuplicate[];
+  postedExpenseId: number | null;
+  /** Live reading progress, only while processing. */
+  progress: { page: number; pages: number } | null;
+  createdAt: string;
+}
+
+export interface ReceiptDraftDetail extends ReceiptDraft { ocrText: string }
+
+export interface ImportResult { created: ReceiptDraft[]; rejected: { names: string[]; reason: string }[] }
+
+export interface PostAllResult { saved: { draftId: number; expenseId: number }[]; failed: { draftId: number; name: string; message: string }[]; skipped: number }
+
+export interface VendorRule { id: number; companyId: number; vendorName: string; categoryId: number; categoryName: string }
+
+export interface ReceiptEvent { draftId: number; status: DraftStatus; progress: { page: number; pages: number } | null }
