@@ -4,6 +4,7 @@ export interface DataPaths {
   root: string;
   database: string;
   receipts: string;
+  logos: string;
   backups: string;
   staging: string;
 }
@@ -15,6 +16,7 @@ export function resolveDataPaths(userDataDir: string): DataPaths {
     root,
     database: path.join(root, 'gable.db'),
     receipts: path.join(root, 'receipts'),
+    logos: path.join(root, 'logos'),
     backups: path.join(root, 'backups'),
     staging: path.join(root, 'staging'),
   };

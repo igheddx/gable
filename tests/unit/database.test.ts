@@ -42,7 +42,7 @@ describe('database', () => {
     migrate(db, migrations);
     const bad = [...migrations, { version: 99, name: 'bad', sql: 'CREATE TABLE ok (id INTEGER); SELECT * FROM missing_table;' }];
     expect(() => migrate(db, bad)).toThrow();
-    expect(schemaVersion(db)).toBe(1);
+    expect(schemaVersion(db)).toBe(Math.max(...migrations.map((m) => m.version)));
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'ok'").get()).toBeUndefined();
     db.close();
   });

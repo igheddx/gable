@@ -29,7 +29,7 @@ test('opens, initializes the database, and reports app info over IPC', async () 
   const page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'Expenses' })).toBeVisible();
   const info = await page.evaluate(() => (window as any).gable.getAppInfo());
-  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 1 } });
+  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 2 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
   await app.close();
 });
@@ -44,7 +44,13 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
   }));
   expect(probe.require).toBe('undefined');
   expect(probe.process).toBe('undefined');
-  expect(probe.api).toEqual(['getAppInfo', 'getSetting', 'setSetting']);
+  expect(probe.api).toEqual(
+    ['archiveCompany', 'archiveProperty', 'chooseCompanyLogo', 'clearCompanyLogo', 'createCompany', 'createProperty', 'getAppInfo',
+      'getCompanyLogo', 'getProperty', 'getSetting', 'listCompanies', 'listProperties', 'restoreCompany', 'restoreProperty',
+      'setDefaultCompany', 'setSetting', 'updateCompany', 'updateProperty'],
+  );
+  // Task-specific methods only: nothing that takes a SQL string, a file path, or a channel name.
+  expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|file(?!Logo)/i.test(k))).toBe(false);
   await app.close();
 });
 

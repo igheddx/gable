@@ -1,9 +1,11 @@
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import squirrelStartup from 'electron-squirrel-startup';
 import { openDatabase, type Db } from '../db/connection';
 import { AppService } from '../services/appService';
+import { CompanyService } from '../services/companyService';
+import { PropertyService } from '../services/propertyService';
 import { chooseUserDataDir, resolveDataPaths } from '../platform/paths';
 import { isTrustedSender, registerIpc } from './ipc';
 
@@ -95,12 +97,27 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     const paths = resolveDataPaths(app.getPath('userData'));
-    for (const dir of [paths.root, paths.receipts, paths.backups, paths.staging]) {
+    for (const dir of [paths.root, paths.receipts, paths.backups, paths.staging, paths.logos]) {
       fs.mkdirSync(dir, { recursive: true });
     }
     db = openDatabase(paths.database);
+    const companies = new CompanyService(db, paths.logos);
     registerIpc(
-      new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
+      {
+        app: new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
+        companies,
+        properties: new PropertyService(db, companies),
+      },
+      {
+        chooseImageFile: async () => {
+          const r = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+            title: 'Choose a company logo',
+            properties: ['openFile'],
+            filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
+          });
+          return r.canceled ? null : (r.filePaths[0] ?? null);
+        },
+      },
       ALLOWED_ORIGINS,
     );
     hardenSession();
