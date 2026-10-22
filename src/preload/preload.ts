@@ -69,6 +69,16 @@ const api: GableApi = {
   exportReportXlsx: (request) => call('reports:exportXlsx', request),
   exportReportPdf: (request) => call('reports:exportPdf', request),
 
+  getBackupStatus: () => call('backups:status'),
+  setAutoBackup: (enabled) => call('backups:setAuto', { enabled }),
+  chooseBackupFolder: () => call('backups:chooseDestination'),
+  useDefaultBackupFolder: () => call('backups:useDefaultDestination'),
+  runBackup: () => call('backups:run'),
+  inspectBackup: (listedFile) => call('backups:inspect', { listed: listedFile }),
+  restoreBackup: (token) => call('backups:restore', { token }),
+  discardRestore: (token) => call('backups:discard', { token }),
+  checkReceiptFiles: () => call('backups:checkFiles'),
+
   listVendorRules: (companyId) => call('vendorRules:list', { companyId }),
   createVendorRule: (companyId, vendorName, categoryId) => call('vendorRules:create', { companyId, vendorName, categoryId }),
   deleteVendorRule: (id) => call('vendorRules:delete', { id }),

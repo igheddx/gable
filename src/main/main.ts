@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, powerSaveBlocker, session, shell, utilityProcess } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import squirrelStartup from 'electron-squirrel-startup';
@@ -12,11 +12,13 @@ import { FinancialService } from '../services/financialService';
 import { ReceiptFiles } from '../services/receiptFiles';
 import { ReceiptService } from '../services/receiptService';
 import { ReportService } from '../services/reportService';
-import { ThreadPoolExecutor } from '../services/ocr/executors';
+import { PoolExecutor, type Spawn } from '../services/ocr/executors';
 import { missingOcrResources, resolveOcrResources } from '../services/ocr/resources';
 import { RECEIPT_EVENT_CHANNEL } from '../shared/ipc';
 import os from 'node:os';
 import { createLogger } from './log';
+import { BackupManager } from './backupManager';
+import { BackupConfigStore, BackupService, preUpgradeSnapshotter } from '../services/backup/backupService';
 import { chooseUserDataDir, resolveDataPaths } from '../platform/paths';
 import { isTrustedSender, registerIpc } from './ipc';
 
@@ -89,7 +91,21 @@ async function renderPdf(html: string, opts: { landscape: boolean; footerTemplat
   }
 }
 let db: Db | null = null;
-let ocr: ThreadPoolExecutor | null = null;
+let ocr: PoolExecutor | null = null;
+
+/**
+ * While Gable is reading receipts (or making a backup) it must not be put to sleep by the operating system.
+ * macOS "App Nap" can freeze a window that is behind others, which would stall the work and its timeouts.
+ */
+let keepAwakeCount = 0;
+let keepAwakeId: number | null = null;
+function keepAwake(on: boolean): void {
+  keepAwakeCount = Math.max(0, keepAwakeCount + (on ? 1 : -1));
+  if (keepAwakeCount > 0 && keepAwakeId === null) keepAwakeId = powerSaveBlocker.start('prevent-app-suspension');
+  if (keepAwakeCount === 0 && keepAwakeId !== null) { powerSaveBlocker.stop(keepAwakeId); keepAwakeId = null; }
+}
+let dbClosedForRestore = false;
+let backupManager: BackupManager | null = null;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -108,6 +124,7 @@ function createWindow(): void {
       nodeIntegration: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
+      backgroundThrottling: false,
     },
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
@@ -153,7 +170,7 @@ if (!app.requestSingleInstanceLock()) {
     for (const dir of [paths.root, paths.receipts, paths.backups, paths.staging, paths.logos]) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    db = openDatabase(paths.database);
+    db = openDatabase(paths.database, { beforeUpgrade: preUpgradeSnapshotter(path.join(paths.backups, 'pre-upgrade')) });
     const companies = new CompanyService(db, paths.logos);
     const files = new ReceiptFiles(paths.receipts, paths.staging);
     const expenses = new ExpenseService(db, companies, files);
@@ -166,13 +183,49 @@ if (!app.requestSingleInstanceLock()) {
     const workerFile = path.join(__dirname, 'ocrWorker.cjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
     const logger = createLogger(path.join(paths.root, 'logs'));
     logger.log(`start gable ${app.getVersion()} ${process.platform} ${process.arch}`);
-    ocr = new ThreadPoolExecutor(workerFile, resources, Math.max(1, Math.min(2, os.cpus().length - 1)), [], (e) => logger.log(`ocr job=${e.id} ${e.type} ${e.phase}${e.detail ? ` ${e.detail}` : ''}${e.ms !== undefined ? ` ${e.ms}ms` : ''}${e.code ? ` ${e.code}` : ''}`));
+    // Each reader is its own operating-system process, so a reader that gets stuck can be killed for real:
+    // it can never freeze Gable or stop it from quitting, and a crash there cannot take Gable down.
+    const spawn: Spawn = () => {
+      const child = utilityProcess.fork(workerFile, [JSON.stringify(resources)], { serviceName: 'Gable reader', stdio: 'ignore' });
+      return {
+        postMessage: (m) => child.postMessage(m),
+        onMessage: (cb) => { const f = (m: unknown) => cb(m as never); child.on('message', f); return () => { child.off('message', f); }; },
+        onExit: (cb) => { const f = () => cb(); child.on('exit', f); return () => { child.off('exit', f); }; },
+        kill: () => {
+          const pid = child.pid;
+          child.kill();
+          // A process stuck in native code may ignore a polite stop.
+          if (pid) setTimeout(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }, 1000).unref();
+        },
+      };
+    };
+    ocr = new PoolExecutor(spawn, Math.max(1, Math.min(2, os.cpus().length - 1)), (e) => { if (e.phase === 'start') keepAwake(true); else if (e.phase === 'done') keepAwake(false); logger.log(`ocr job=${e.id} ${e.type} ${e.phase}${e.detail ? ` ${e.detail}` : ''}${e.ms !== undefined ? ` ${e.ms}ms` : ''}${e.code ? ` ${e.code}` : ''}`); });
     const properties = new PropertyService(db, companies);
     const receipts = new ReceiptService(db, companies, expenses, files, ocr, { concurrency: 2 });
     receipts.onEvent((e) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(RECEIPT_EVENT_CHANNEL, e);
     });
     receipts.recoverInterrupted();
+
+    const backupService = new BackupService({ paths, getDb: () => db!, files, appVersion: app.getVersion() });
+    const backups = new BackupManager(
+      backupService, new BackupConfigStore(paths.root), { root: paths.root, backups: paths.backups },
+      {
+        chooseFolder: async () => {
+          // Automated tests set this to skip the native dialog.
+          if (process.env.GABLE_TEST_BACKUP_DIR) return process.env.GABLE_TEST_BACKUP_DIR;
+          const r = await dialog.showOpenDialog(mainWindow ?? undefined!, { title: 'Choose a folder for backups', properties: ['openDirectory', 'createDirectory'] });
+          return r.canceled ? null : (r.filePaths[0] ?? null);
+        },
+        chooseBackupFile: async () => {
+          if (process.env.GABLE_TEST_RESTORE_FILE) return process.env.GABLE_TEST_RESTORE_FILE;
+          const r = await dialog.showOpenDialog(mainWindow ?? undefined!, { title: 'Choose a Gable backup', properties: ['openFile'], filters: [{ name: 'Gable backup', extensions: ['zip'] }] });
+          return r.canceled ? null : (r.filePaths[0] ?? null);
+        },
+      },
+    );
+    backupManager = backups;
+    backups.startScheduler(Number(process.env.GABLE_TEST_AUTO_BACKUP_DELAY_MS) || 15_000);
 
     registerIpc(
       {
@@ -184,9 +237,24 @@ if (!app.requestSingleInstanceLock()) {
         financials: new FinancialService(db),
         receipts,
         reports: new ReportService(db, companies, properties),
+        backups,
       },
       {
         openFile: (p) => shell.openPath(p),
+        closeDatabaseForRestore: () => {
+          receipts.stopAll();
+          void ocr?.shutdown();
+          db?.close();
+          db = null;
+          dbClosedForRestore = true;
+        },
+        databaseWasClosed: () => dbClosedForRestore,
+        restartApp: () => {
+          // Tests set this so the test can reopen the app itself.
+          if (process.env.GABLE_TEST_NO_RELAUNCH) { app.exit(0); return; }
+          app.relaunch();
+          app.exit(0);
+        },
         chooseSavePath: async (defaultName, filterName, ext) => {
           // Automated tests set this to skip the native dialog; people never see or need it.
           const testDir = process.env.GABLE_TEST_EXPORT_DIR;
@@ -230,6 +298,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit();
   });
   app.on('before-quit', () => {
+    backupManager?.stopScheduler();
     void ocr?.shutdown();
     db?.close();
     db = null;

@@ -23,7 +23,8 @@ function shouldCopy(name: string, rel: string, target: string): boolean {
       if (/^(deps|src|build)(\/|$)/.test(r)) return false;
       return !(/^prebuilds\/.+\.node$/.test(r) && !r.endsWith(`${target}.node`));
     case 'pdfjs-dist':
-      return r === 'package.json' || r === 'LICENSE' || /^legacy(\/build(\/(pdf|pdf\.worker)\.mjs)?)?$/.test(r) || /^(standard_fonts|wasm)(\/|$)/.test(r);
+      // The code is bundled into the reader; only the data files it reads at run time are shipped.
+      return r === 'package.json' || r === 'LICENSE' || /^(standard_fonts|wasm)(\/|$)/.test(r);
     case '@tesseract.js-data/eng':
       return r === 'package.json' || r === 'index.js' || /^4\.0\.0_best_int(\/|$)/.test(r);
     case 'tesseract.js':

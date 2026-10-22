@@ -95,6 +95,13 @@ export function SettingsPage() {
           </div>
           <Button variant="secondary" onClick={() => navigate('/settings/categories')}>Manage categories</Button>
         </div>
+        <div className="panel narrow settings-link">
+          <div>
+            <h2 className="panel__title">Backups</h2>
+            <p className="muted">Back up everything, choose where backups go, and restore from one if something goes wrong.</p>
+          </div>
+          <Button variant="secondary" onClick={() => navigate('/settings/backups')}>Manage backups</Button>
+        </div>
         <label className="check">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           <span>Show archived companies</span>

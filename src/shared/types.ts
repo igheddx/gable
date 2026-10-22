@@ -164,3 +164,34 @@ export interface PostAllResult { saved: { draftId: number; expenseId: number }[]
 export interface VendorRule { id: number; companyId: number; vendorName: string; categoryId: number; categoryName: string }
 
 export interface ReceiptEvent { draftId: number; status: DraftStatus; progress: { page: number; pages: number } | null }
+
+export interface BackupInfo { file: string; bytes: number; modifiedAt: string; kind: string }
+
+export interface BackupStatus {
+  autoEnabled: boolean;
+  /** Folder name shown to the person; the full path is not exposed. */
+  destinationLabel: string;
+  isDefaultDestination: boolean;
+  /** True when backups go to the same drive as Gable's data, which does not protect against losing that drive. */
+  sameDisk: boolean;
+  destinationAvailable: boolean;
+  lastSuccess: { at: string; kind: string; file: string; warnings: string[] } | null;
+  lastFailure: { at: string; message: string } | null;
+  lastRestore: { at: string; ok: boolean; message: string } | null;
+  retention: number;
+  backups: BackupInfo[];
+  running: boolean;
+}
+
+export interface BackupRunResult { file: string; bytes: number; createdAt: string; kind: string; warnings: string[] }
+
+export interface RestorePreview {
+  token: string;
+  createdAt: string;
+  appVersion: string;
+  upgradeNeeded: boolean;
+  counts: { companies: number; properties: number; expenses: number; receipts: number; drafts: number };
+  warnings: string[];
+}
+
+export interface FileCheck { missing: { kind: 'expense' | 'draft' | 'logo'; id: number; label: string }[]; unreferenced: number }

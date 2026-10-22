@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { categoryInputSchema, companyInputSchema, draftPatchSchema, draftQuerySchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
 import type { OverviewData, ReportDoc, ReportRequest } from './reportTypes';
+import type { BackupRunResult, BackupStatus, FileCheck, RestorePreview } from './types';
 import type { Category, Company, Expense, ExpenseDetail, ExpensePage, ImportResult, PostAllResult, Property, PropertyFinancials, PropertyPage, ReceiptDraft, ReceiptDraftDetail, ReceiptEvent, StagedFile, VendorRule } from './types';
 
 /**
@@ -95,6 +96,17 @@ export const ipcContract = {
   'reports:build': { input: reportRequestSchema },
   'reports:exportXlsx': { input: reportRequestSchema },
   'reports:exportPdf': { input: reportRequestSchema },
+
+  'backups:status': { input: z.undefined() },
+  'backups:setAuto': { input: z.object({ enabled: z.boolean() }).strict() },
+  'backups:chooseDestination': { input: z.undefined() },
+  'backups:useDefaultDestination': { input: z.undefined() },
+  'backups:run': { input: z.undefined() },
+  /** Choose a backup to restore: from the list (by file name) or by browsing for a file. */
+  'backups:inspect': { input: z.object({ listed: z.string().regex(/^Gable-backup-[A-Za-z0-9-]+\.zip$/).nullable() }).strict() },
+  'backups:restore': { input: z.object({ token: z.string().regex(/^[0-9a-f]{24}$/) }).strict() },
+  'backups:discard': { input: z.object({ token: z.string().regex(/^[0-9a-f]{24}$/) }).strict() },
+  'backups:checkFiles': { input: z.undefined() },
 
   'vendorRules:list': { input: z.object({ companyId: id }).strict() },
   'vendorRules:create': { input: z.object({ companyId: id, vendorName: z.string().trim().min(1).max(160), categoryId: id }).strict() },
@@ -191,6 +203,19 @@ export interface GableApi {
   /** Builds the report, asks where to save it, and writes a real .xlsx file. */
   exportReportXlsx(request: ReportRequest): R<{ saved: boolean; fileName: string | null }>;
   exportReportPdf(request: ReportRequest): R<{ saved: boolean; fileName: string | null }>;
+
+  getBackupStatus(): R<BackupStatus>;
+  setAutoBackup(enabled: boolean): R<BackupStatus>;
+  /** Opens a native folder picker; resolves to the updated status, or null if cancelled. */
+  chooseBackupFolder(): R<BackupStatus | null>;
+  useDefaultBackupFolder(): R<BackupStatus>;
+  runBackup(): R<BackupRunResult>;
+  /** Checks a backup without changing anything. With no file name it opens a native file picker. Null if cancelled. */
+  inspectBackup(listedFile: string | null): R<RestorePreview | null>;
+  /** Replaces ALL data with the inspected backup, then restarts Gable. */
+  restoreBackup(token: string): R<{ restarting: boolean }>;
+  discardRestore(token: string): R<null>;
+  checkReceiptFiles(): R<FileCheck>;
 
   listVendorRules(companyId: number): R<VendorRule[]>;
   createVendorRule(companyId: number, vendorName: string, categoryId: number): R<VendorRule[]>;

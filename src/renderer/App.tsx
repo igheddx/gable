@@ -9,6 +9,7 @@ import { PropertyEditPage } from './pages/PropertyEditPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { BackupsPage } from './pages/BackupsPage';
 import { CompanyEditPage } from './pages/CompanyEditPage';
 import { SetupPage } from './pages/SetupPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -39,6 +40,8 @@ function Routes() {
       return <ReportsPage key={route.query.toString()} />;
     case '/settings':
       return <SettingsPage />;
+    case '/settings/backups':
+      return <BackupsPage />;
     case '/settings/categories':
       return <CategoriesPage />;
     case '/settings/company':

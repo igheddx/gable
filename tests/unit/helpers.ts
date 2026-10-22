@@ -84,3 +84,16 @@ export function exp(
 
 export const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
 export const PDF = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(64, 2)]);
+
+import { BackupService } from '../../src/services/backup/backupService';
+
+/** A backup service bound to a stack's folders. The stack's db handle may be replaced after a restore. */
+export function backupFor(s: Stack, over: Partial<ConstructorParameters<typeof BackupService>[0]> = {}): BackupService {
+  return new BackupService({
+    paths: { root: s.dir, database: path.join(s.dir, 'gable.db'), receipts: s.receiptsDir, logos: path.join(s.dir, 'logos'), staging: path.join(s.dir, 'staging'), backups: path.join(s.dir, 'backups') },
+    getDb: () => s.db,
+    files: s.files,
+    appVersion: '0.1.0-test',
+    ...over,
+  });
+}

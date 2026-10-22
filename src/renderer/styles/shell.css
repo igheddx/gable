@@ -260,3 +260,7 @@ tr.is-quiet td, tr.is-quiet th { color: var(--text-muted); }
 td.is-loss, .summary__value.is-loss { color: var(--danger); }
 @media (max-width: 1100px) { .summary--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .summary--4 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Stage 7: backups ---------- */
+.backup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap; }
+.backup-dest { display: flex; align-items: flex-end; gap: var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; }

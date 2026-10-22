@@ -1,6 +1,10 @@
 import fs from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import path from 'node:path';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+// pdf.js is bundled into the reader (not loaded as a separate module at run time), together with its page
+// engine, which it looks for on globalThis. Fewer moving parts in the reader process.
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import { createWorker, type Worker as TessWorker } from 'tesseract.js';
 import {
   MAX_PDF_PAGES, OCR_PAGE_LIMIT, OcrFileError,
@@ -17,6 +21,57 @@ interface PdfPage {
 interface PdfDoc { numPages: number; getPage(n: number): Promise<PdfPage>; destroy(): Promise<void> }
 interface PdfJs { getDocument(o: Record<string, unknown>): { promise: Promise<PdfDoc>; destroy(): Promise<void> } }
 
+/**
+ * pdf.js decides whether it is "in Node" from process details that Electron's utility processes do not match,
+ * and would then try to use a web page's document and fetch. These factories make it use the file system and
+ * our canvas library regardless of where the reader runs.
+ */
+class ReaderCanvasFactory {
+  create(width: number, height: number) {
+    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
+    const canvas = createCanvas(width, height);
+    return { canvas, context: canvas.getContext('2d') };
+  }
+  reset(c: { canvas: { width: number; height: number } | null }, width: number, height: number) {
+    if (!c.canvas) throw new Error('Canvas is not specified');
+    c.canvas.width = width;
+    c.canvas.height = height;
+  }
+  destroy(c: { canvas: { width: number; height: number } | null; context: unknown }) {
+    if (!c.canvas) throw new Error('Canvas is not specified');
+    c.canvas.width = c.canvas.height = 0;
+    c.canvas = null;
+    c.context = null;
+  }
+}
+
+class ReaderFilterFactory {
+  addFilter() { return 'none'; }
+  addHCMFilter() { return 'none'; }
+  addAlphaFilter() { return 'none'; }
+  addLuminosityFilter() { return 'none'; }
+  addKnockoutFilter() { return 'none'; }
+  addHighlightHCMFilter() { return 'none'; }
+  addSelectionHCMFilter() { return 'none'; }
+  addSelectionFilter() { return 'none'; }
+  createSelectionStyle() { return null; }
+  destroy() {}
+}
+
+class ReaderBinaryDataFactory {
+  private readonly bases: Record<string, string | null>;
+  constructor(o: { cMapUrl?: string | null; standardFontDataUrl?: string | null; wasmUrl?: string | null }) {
+    this.bases = { cMapUrl: o.cMapUrl ?? null, standardFontDataUrl: o.standardFontDataUrl ?? null, wasmUrl: o.wasmUrl ?? null };
+  }
+  async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
+    const base = this.bases[kind];
+    if (!base) throw new Error(`Ensure that the ${kind} API parameter is provided.`);
+    // Only plain file names from pdf.js itself are expected; never let one leave its folder.
+    if (filename.includes('..') || /[\\/]/.test(filename)) throw new Error('Unexpected data file name');
+    return new Uint8Array(fs.readFileSync(path.join(base, filename)));
+  }
+}
+
 const isPdf = (mime: string) => mime === 'application/pdf';
 
 /**
@@ -25,7 +80,6 @@ const isPdf = (mime: string) => mime === 'application/pdf';
  */
 export class OcrPipeline {
   private tess: Promise<TessWorker> | null = null;
-  private pdfjs: Promise<PdfJs> | null = null;
 
   constructor(private readonly res: OcrResources, private readonly trace: (message: string) => void = () => {}) {}
 
@@ -50,16 +104,17 @@ export class OcrPipeline {
     return this.tess;
   }
 
-  private lib(): Promise<PdfJs> {
-    if (!this.pdfjs) this.pdfjs = import(/* @vite-ignore */ pathToFileURL(this.res.pdfjsPath).href) as Promise<PdfJs>;
-    return this.pdfjs;
+  private lib(): PdfJs {
+    (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
+    return pdfjsLib as unknown as PdfJs;
   }
 
   private async openPdf(path: string): Promise<{ doc: PdfDoc; close: () => Promise<void> }> {
-    const lib = await this.lib();
+    const lib = this.lib();
     const data = new Uint8Array(fs.readFileSync(path));
     const task = lib.getDocument({
-      data, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0,
+      data, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0, useWorkerFetch: false,
+      CanvasFactory: ReaderCanvasFactory, FilterFactory: ReaderFilterFactory, BinaryDataFactory: ReaderBinaryDataFactory,
       standardFontDataUrl: this.res.standardFontsDir.replace(/[\\/]*$/, '/'),
       wasmUrl: this.res.pdfjsWasmDir.replace(/[\\/]*$/, '/'),
     });

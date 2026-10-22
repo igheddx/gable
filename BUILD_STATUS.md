@@ -62,7 +62,17 @@ Last updated: 2026-10-22
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
 
-## Open issue: intermittent receipt-reading hang (found in Stage 5/6)
+## Stage 7 status (2026-10-22): backups, restore, migrations — implemented, NOT fully verified
+
+- Built: streaming zip backups (consistent SQLite snapshot + receipts + logos + checksummed manifest, written to a temporary name then renamed), daily automatic backup while the app is open (14 newest kept; manual and pre-restore backups never auto-deleted), restore that validates in staging (safe paths, checksums, integrity, future-schema refusal), a pre-restore safety backup, rollback on failure, all-or-nothing upgrades with a pre-upgrade copy, Backups screen, receipt-file check. Not encrypted.
+- Verified on macOS: 42 unit tests in `tests/unit/backup.test.ts` (round trip, corrupt/truncated/unsafe/future archives, fault injection at every restore step, older-schema upgrade, low disk, busy database, retention). Packaged-app backup tests exist; one (auto-backup checkbox) was fixed but not re-run.
+- NOT verified: Stage 7 on Windows; the native folder and file dialogs; restart-after-restore on a real install.
+
+## Open issue: intermittent second-launch reader hang (UNRESOLVED)
+
+Receipt reading now runs in separate killable processes with pdf.js bundled (this fixed PDF handling and the earlier quit hang). Remaining: in roughly 1 of 3 isolated runs of the "drafts survive restart" test, the second app launch never starts its reader. A process sample showed the main thread idle and no reader process. Leading hypothesis is macOS App Nap throttling a hidden test window. A keep-awake (powerSaveBlocker) during reading and `backgroundThrottling: false` were just added and are UNTESTED. Do not treat OCR as reliable until this is confirmed over repeated full runs and a green Windows CI.
+
+## (Earlier notes) intermittent receipt-reading hang (found in Stage 5/6)
 
 Symptom: in full packaged-app test runs (and once on Windows CI) a receipt-reading job sometimes never finished, and quitting the app then hung because a worker thread could not be stopped. It did not reproduce in isolation or in a 60-round stress test of the worker pool. Mitigations added: per-job timeouts (inspect 30 s, preview 30 s, read 180 s), a hard exit 3 seconds after quit begins, and a support log (`<data>/logs/gable.log`) with job timings and engine milestones (no receipt contents). After these, 3 consecutive full macOS runs passed (40/40 each, earlier runs had 1 failure in about 3). Root cause is NOT proven; the leading hypothesis is a race when two worker threads start native/WASM code at the same moment. If it recurs, the log shows which step stalled. Treat the OCR reading as unproven on Windows until CI is green repeatedly.
 

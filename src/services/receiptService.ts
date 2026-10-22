@@ -47,6 +47,7 @@ export class ReceiptService {
   private readonly now: () => string;
   private readonly today: () => string;
   private idle: Array<() => void> = [];
+  private stopped = false;
 
   constructor(
     private readonly db: Db,
@@ -74,6 +75,13 @@ export class ReceiptService {
   whenIdle(): Promise<void> {
     if (this.running === 0 && this.queue.length === 0) return Promise.resolve();
     return new Promise((r) => this.idle.push(r));
+  }
+
+  /** Stops all reading immediately (used before the data is replaced). Interrupted receipts start again on the next launch. */
+  stopAll(): void {
+    this.stopped = true;
+    this.queue.length = 0;
+    for (const ac of this.aborts.values()) ac.abort();
   }
 
   /** After a restart, interrupted reads start over; nothing the person already typed is touched. */
@@ -158,7 +166,7 @@ export class ReceiptService {
   }
 
   private pump(): void {
-    while (this.running < this.concurrency && this.queue.length > 0) {
+    while (!this.stopped && this.running < this.concurrency && this.queue.length > 0) {
       const id = this.queue.shift()!;
       this.running += 1;
       void this.read(id).finally(() => {
@@ -191,6 +199,7 @@ export class ReceiptService {
       if (!fresh || fresh.status === 'skipped') return;
       this.applyReading(fresh, r.text, { confidence: r.confidence, notes: r.notes }, opts.overwrite === true);
     } catch (e) {
+      if (this.stopped) return; // the database is being replaced; leave the draft as it is
       const cancelled = e instanceof OcrFileError && e.code === 'cancelled';
       const msg = e instanceof OcrFileError ? e.message : 'This receipt could not be read.';
       this.repo.update(id, cancelled
@@ -199,7 +208,7 @@ export class ReceiptService {
     } finally {
       this.aborts.delete(id);
       this.progress.delete(id);
-      this.emit(id);
+      if (!this.stopped) this.emit(id);
     }
   }
 

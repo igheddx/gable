@@ -9,6 +9,7 @@ export interface OcrResources {
   workerPath: string;
   corePath: string;
   langPath: string;
+  /** Kept for diagnostics; the pdf.js code itself is bundled into the reader. */
   pdfjsPath: string;
   standardFontsDir: string;
   /** pdf.js decoders for JPEG 2000 and similar image formats inside PDFs. */

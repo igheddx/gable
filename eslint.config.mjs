@@ -26,7 +26,7 @@ export default tseslint.config(
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
   {
-    files: ['**/*.{ts,mjs,js}'],
+    files: ['**/*.{ts,mjs,js,cjs}'],
     ignores: ['src/renderer/**'],
     languageOptions: { globals: globals.node },
   },

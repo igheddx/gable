@@ -10,6 +10,7 @@ import type { ExpenseService } from '../services/expenseService';
 import type { FinancialService } from '../services/financialService';
 import type { ReceiptService } from '../services/receiptService';
 import type { ReportService } from '../services/reportService';
+import type { BackupManager } from './backupManager';
 import { exportReport, type ExportPlatform } from './reportExport';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,6 +28,7 @@ export interface Services {
   financials: FinancialService;
   receipts: ReceiptService;
   reports: ReportService;
+  backups: BackupManager;
 }
 
 export interface Platform extends ExportPlatform {
@@ -36,6 +38,10 @@ export interface Platform extends ExportPlatform {
   openFile(path: string): Promise<string>;
   /** Native multi-select picker for receipt files; resolves to chosen paths (empty if cancelled). */
   chooseReceiptFiles(): Promise<string[]>;
+  /** Stops using the database, restarts the app afterwards. */
+  closeDatabaseForRestore(): void;
+  databaseWasClosed(): boolean;
+  restartApp(): void;
 }
 
 /** Pure so it can be tested without Electron: is this frame our own UI? */
@@ -145,6 +151,23 @@ export function buildHandlers(s: Services, platform: Platform): Handlers {
     'reports:build': (i) => s.reports.build(i),
     'reports:exportXlsx': (i) => exportReport('xlsx', i, { reports: s.reports, companies: s.companies, platform }),
     'reports:exportPdf': (i) => exportReport('pdf', i, { reports: s.reports, companies: s.companies, platform }),
+    'backups:status': () => s.backups.status(),
+    'backups:setAuto': (i) => s.backups.setAuto(i.enabled),
+    'backups:chooseDestination': () => s.backups.chooseDestination(),
+    'backups:useDefaultDestination': () => s.backups.useDefaultDestination(),
+    'backups:run': () => s.backups.runManual(),
+    'backups:inspect': (i) => s.backups.inspect(i.listed),
+    'backups:restore': async (i) => {
+      try {
+        await s.backups.restore(i.token, () => platform.closeDatabaseForRestore());
+      } finally {
+        // Once the database has been closed, restart so Gable reopens the data that is actually on disk (restored, or put back).
+        if (platform.databaseWasClosed()) setTimeout(() => platform.restartApp(), 600);
+      }
+      return { restarting: true };
+    },
+    'backups:discard': (i) => { s.backups.discard(i.token); return null; },
+    'backups:checkFiles': () => s.backups.checkFiles(),
     'vendorRules:list': (i) => s.receipts.rules(i.companyId),
     'vendorRules:create': (i) => s.receipts.createRule(i.companyId, i.vendorName, i.categoryId),
     'vendorRules:delete': (i) => { s.receipts.deleteRule(i.id); return null; },

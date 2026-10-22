@@ -73,8 +73,28 @@ export class ReceiptFiles {
     fs.rmSync(path.join(this.stagingDir, `${stagedId}.json`), { force: true });
   }
 
+  private holds = 0;
+  private deferred: string[] = [];
+
+  /**
+   * Postpones deleting stored files (for example while a backup is being written) so every file the
+   * database refers to stays on disk. The returned function ends the hold and performs deferred deletes.
+   */
+  hold(): () => void {
+    this.holds += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.holds -= 1;
+      if (this.holds === 0) for (const n of this.deferred.splice(0)) fs.rmSync(path.join(this.receiptsDir, n), { force: true });
+    };
+  }
+
   remove(storedName: string): void {
-    fs.rmSync(path.join(this.receiptsDir, path.basename(storedName)), { force: true });
+    const name = path.basename(storedName);
+    if (this.holds > 0) { this.deferred.push(name); return; }
+    fs.rmSync(path.join(this.receiptsDir, name), { force: true });
   }
 
   pathOf(storedName: string): string {
