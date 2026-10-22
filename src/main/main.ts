@@ -40,8 +40,9 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 1024,
-    minHeight: 640,
+    // Small enough for 1366x768 at 150% scaling (about 910x512 usable DIPs).
+    minWidth: 800,
+    minHeight: 500,
     show: false,
     backgroundColor: '#F7F5F0',
     title: 'Gable',

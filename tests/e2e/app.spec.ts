@@ -24,11 +24,12 @@ test.afterEach(() => {
 const launch = (): Promise<ElectronApplication> =>
   electron.launch({ executablePath: packagedExecutable(), env: { ...process.env, GABLE_DATA_DIR: dataDir } });
 
-test('opens, initializes the database, and shows app info', async () => {
+test('opens, initializes the database, and reports app info over IPC', async () => {
   const app = await launch();
   const page = await app.firstWindow();
-  await expect(page.getByTestId('app-info')).toContainText('Version');
-  await expect(page.getByTestId('app-info')).toContainText('Version 1');
+  await expect(page.getByRole('heading', { name: 'Expenses' })).toBeVisible();
+  const info = await page.evaluate(() => (window as any).gable.getAppInfo());
+  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 1 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
   await app.close();
 });

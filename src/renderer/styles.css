@@ -1,8 +1,0 @@
-:root { color-scheme: light; --ink: #182724; --ivory: #f7f5f0; --muted: #55625f; }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--ivory); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
-.shell { max-width: 720px; margin: 64px auto; padding: 0 24px; }
-h1 { font-weight: 600; margin: 0 0 8px; }
-.muted { color: var(--muted); }
-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin-top: 24px; }
-dt { color: var(--muted); } dd { margin: 0; font-variant-numeric: tabular-nums; }

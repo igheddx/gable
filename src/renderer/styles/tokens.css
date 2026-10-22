@@ -1,0 +1,101 @@
+/* Gable design tokens. Fonts are bundled locally (Inter, Source Serif 4; both SIL OFL 1.1). */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'Source Serif 4 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+:root {
+  /* Core palette */
+  --ink: #182724;
+  --ivory: #f7f5f0;
+  --brass: #a78348; /* accent: rules, indicators, large marks. 3.2:1 on ivory: never small text */
+  --brass-text: #7a5f2b; /* brass for text: 5.5:1 on ivory */
+  --brass-on-ink: #d4b97f; /* brass for text on ink: 8.2:1 */
+  --panel: #ffffff;
+
+  /* Neutrals */
+  --text: var(--ink);
+  --text-muted: #55625f; /* 5.8:1 on ivory */
+  --text-on-ink: #f7f5f0;
+  --text-on-ink-muted: #b9c4c0;
+  --divider: #ddd9ce; /* decorative rules */
+  --border-control: #8a9490; /* 3.1:1 on white: meets 3:1 for UI components */
+  --surface-subtle: #efece4;
+  --ink-hover: #243a35;
+  --ink-soft: #2f4a44;
+
+  /* Semantic (always paired with text or an icon) */
+  --success: #1a5c3a;
+  --success-bg: #e6f2eb;
+  --danger: #8e2323;
+  --danger-bg: #f9e8e6;
+  --warning: #7a4f00;
+  --warning-bg: #fbf0d9;
+  --review: #6b531f;
+  --review-bg: #f3ebda;
+  --info: #2f4a44;
+  --info-bg: #e8eeec;
+  --focus: #1d5fd1;
+
+  /* Type */
+  --font-sans: 'Inter Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+  --fs-xs: 0.75rem; /* 12 */
+  --fs-sm: 0.8125rem; /* 13 */
+  --fs-md: 0.9375rem; /* 15 */
+  --fs-lg: 1.125rem; /* 18 */
+  --fs-xl: 1.5rem; /* 24 */
+  --fs-2xl: 2rem; /* 32 */
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+
+  /* Space (4px base) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* Shape and depth */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --shadow-1: 0 1px 2px rgb(24 39 36 / 8%);
+  --shadow-2: 0 8px 24px rgb(24 39 36 / 16%);
+  --control-h: 42px;
+  --control-h-sm: 32px;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Layers */
+  --z-dialog: 100;
+  --z-toast: 200;
+  --z-popover: 50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

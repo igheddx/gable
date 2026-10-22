@@ -70,6 +70,48 @@ Plain English for David. No "SQLite", "IPC", "OCR engine internals" in normal sc
 4. Inspect alignment, contrast, density, truncation, scrolling; fix; recapture.
 5. Record file paths of captures in BUILD_STATUS.md. If tooling is unavailable, say so and list manual steps.
 
-## 11. Open design items (filled at Prompt 2)
+## 11. Implemented system (Prompt 2)
 
-Final neutral/divider values, darker brass text variant, font selection and licenses, icon family, app icon (original vector artwork, not emoji), contrast table, screenshots.
+Source: `src/renderer/styles/tokens.css` (tokens), `components.css`, `shell.css`, and `src/renderer/components/`.
+
+### Fonts (bundled locally via npm, no remote loading; both SIL Open Font License 1.1)
+- **Inter Variable** (UI sans, tabular figures through `font-variant-numeric`), package `@fontsource-variable/inter`.
+- **Source Serif 4 Variable** (page titles, dialog titles, brand), package `@fontsource-variable/source-serif-4`.
+- Only the Latin subset is shipped. Licenses are in the packages' `LICENSE` files.
+
+### Icons
+`lucide-react` (ISC license), one line-icon family, used sparingly. The Gable mark is original artwork (a simple roofline) in `Shell.tsx`; the packaged app icon is still the default Electron icon and is scheduled for Prompt 8.
+
+### Contrast (WCAG 2.x ratios, computed from the token values)
+| Pairing | Ratio | Use |
+| --- | --- | --- |
+| ink `#182724` on ivory `#F7F5F0` | 14.2 | Body text |
+| muted `#55625F` on ivory / white | 5.8 / 6.4 | Secondary text |
+| brass `#A78348` on ivory | 3.2 | **Not for text.** Rules, active indicator, large marks only |
+| brass-text `#7A5F2B` on ivory / white | 5.5 / 6.0 | Brass-colored text |
+| brass-on-ink `#D4B97F` on ink | 8.2 | Brass text in the sidebar |
+| ivory on ink | 14.2 | Sidebar and primary buttons |
+| muted-on-ink `#B9C4C0` on ink | 8.7 | Sidebar secondary text |
+| control border `#8A9490` on white | 3.1 | Input borders (UI component minimum is 3:1) |
+| danger `#8E2323` on danger-bg | 7.3 | Errors |
+| success `#1A5C3A` on success-bg | 6.9 | Positive status |
+| review `#6B531F` on review-bg | 6.1 | "Needs review" |
+Status is always text plus an icon; red and green are never the only signal. Divider `#DDD9CE` (1.3:1) is decorative only.
+
+### Components
+Button, Field (label, hint, error, ARIA wiring), TextField, TextAreaField, CurrencyField, DateField, SelectField, Combobox (ARIA combobox, keyboard: arrows, Enter, Escape), Badge, Dialog (native `<dialog>`: modal, focus trap, Escape, focus returns to opener), Toast (live region), EmptyState, ErrorState, Notice, Disclosure, ReceiptDropZone (real "Choose files" button, so drag and drop is never required), AllocationEditor (live remaining amount, exact-sum validation). Dev-only showcase at `#/showcase` (included in dev and test builds only; `VITE_SHOWCASE=1`).
+
+### Layout
+Sidebar 248px (208px under 1180px wide), main content max 1320px. Receipt review is three panes (queue, preview, form) and switches to a queue strip with Receipt/Details tabs when its container is under 1180px. The Electron window minimum is 800x500 so 1366x768 at 150% scaling (about 910x512) is usable.
+
+### Honesty of the preview
+All data on these screens is fictional (`fixtures.ts`). Added expenses and "reviewed" receipts live in memory only, and every such screen carries a visible "Design preview" notice. Pages that are not built (Overview, Reports, Settings) show a plain "not built yet" state with no buttons. The Properties page is read-only sample data with working search and status filter.
+
+### Review procedure (reproducible)
+`npm run screenshots` packages a test build and writes PNGs to `docs/screenshots/<size>/`. Scaling is emulated by shrinking the window to screen size divided by scale (Windows DIPs), so no zoom artifacts.
+Sizes: 1280x800 @100%, 1366x768 @125% (1093x614), 1920x1080 @100%, 1366x768 @150% (911x512), 1280x800 @150% (853x533).
+Screens: expenses list, property list, expense entry (empty, errors, split), receipt review (default, failed, duplicate, preview tab), showcase (top, middle, bottom).
+Manual keyboard check: Tab through the expense form (order: property, vendor, date, amount, category, split, notes, receipts, buttons); arrows/Enter/Escape in comboboxes; Escape closes dialogs and focus returns to the opener.
+
+### Known gaps
+No packaged app icon yet; dark mode not provided (not requested); the showcase is not exhaustive for every state of every component; real Windows rendering (font smoothing, native select popups) is unverified.

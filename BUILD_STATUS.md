@@ -12,7 +12,7 @@ Last updated: 2026-10-22
 | --- | --- | --- | --- |
 | 0 | Product contract & docs | Done (committed 43e1afc) | Review requirements |
 | 1 | Desktop foundation + packaging proof | Mac verified; Windows NOT RUN | Desktop runs; Windows path exists |
-| 2 | Design system + expense screen | Not started | Visual approval |
+| 2 | Design system + expense screen | Mac verified; owner visual review pending | Visual approval |
 | 3 | Companies, properties, search | Not started | |
 | 4 | Manual expenses, totals | Not started | Totals reconcile |
 | 5 | Receipts + OCR | Not started | Saves time |
@@ -61,6 +61,25 @@ Last updated: 2026-10-22
 - Fixture B "2026 expenses are $20,000" matches commission + seller closing.
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
+
+## Stage 2 evidence (2026-10-22)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Typecheck, lint | `npm run typecheck`, `npm run lint` | PASS |
+| Unit tests (money, dates, DB, IPC, paths) | `npm test` | PASS: 48 tests (money parsing is string-based; rejects negatives, 3 decimals, junk; formats grouping; real-calendar date validation) |
+| Packaged-app E2E | `npm run test:e2e` | PASS: 14 tests. Foundation (6) plus expense form (8): validation keeps typed input and focuses first problem; negative amount rejected; Save & add another keeps property/date, clears the rest, focuses vendor; split must sum exactly; unsaved-work dialog on navigation and on company switch (form never moves); HEIC and other unsupported files explained; All Companies requires choosing a company |
+| Visual capture | `npm run screenshots` | PASS: 5 sizes x 13 screens in `docs/screenshots/` (not committed, regenerate with the command). Screenshots were inspected by viewing them; issues found and fixed: right-aligned text in selects, broken receipt-review layout (container query on the container itself), clipped 125/150% captures (tooling), open dropdown on programmatic focus, double scrollbar |
+| Contrast | computed ratios | Recorded in DESIGN.md. Brass `#A78348` is 3.2:1 on ivory so it is used for non-text accents only |
+| Windows rendering | n/a | NOT RUN |
+| CI | `.github/workflows/ci.yml` | Pushed 2026-10-22; run result not yet confirmed (GitHub API listed no runs when last checked) |
+
+Stage 2 limitations:
+- All data is fictional and in memory. Expense Save, receipt review Save, "Try reading again", and attachments do not persist or run OCR. Every such screen says so. Real behavior comes in Prompts 3 to 5.
+- Keyboard-only use was exercised through automated tests (tab focus, Enter/Escape, dialogs) but not through a full manual screen-reader pass.
+- Windows scaling is emulated by window size, not real OS scaling.
+- The packaged app still uses the default Electron icon.
+- Native `<select>` is used for the company switcher and status filters (accessible and keyboard friendly; its popup look is OS-drawn).
 
 ## Stage 1 notes and limitations
 

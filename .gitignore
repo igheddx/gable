@@ -12,3 +12,4 @@ out/
 /.test-data/
 test-results/
 playwright-report/
+docs/screenshots/

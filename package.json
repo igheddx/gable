@@ -18,9 +18,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "GABLE_E2E=1 electron-forge package && playwright test",
+    "test:e2e": "GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && playwright test",
     "demo:db": "tsx scripts/build-demo-db.ts",
-    "dev:demo": "npm run demo:db && GABLE_DATA_DIR=.dev-data/demo electron-forge start"
+    "dev:demo": "npm run demo:db && GABLE_DATA_DIR=.dev-data/demo electron-forge start",
+    "screenshots": "GABLE_E2E=1 VITE_SHOWCASE=1 electron-forge package && SCREENSHOTS=1 playwright test screenshots"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",
@@ -48,8 +49,11 @@
     "vitest": "5.0.5"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/source-serif-4": "5.3.1",
     "better-sqlite3": "13.0.3",
     "electron-squirrel-startup": "1.0.1",
+    "lucide-react": "1.61.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
