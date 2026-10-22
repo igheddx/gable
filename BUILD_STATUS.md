@@ -62,6 +62,10 @@ Last updated: 2026-10-22
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
 
+## Latest CI (2026-10-22)
+
+Commit `57ab498` (all stages, app icon, docs): GitHub Actions **success on Windows x64 and macOS**: typecheck, lint, unit tests, packaged-app e2e (including receipt reading, reports and backups) and the Windows Squirrel installer build. Earlier runs in this session failed on the intermittent reader issue, so one green run is not proof of stability. No clean-machine Windows test has been done.
+
 ## Stage 7 status (2026-10-22): backups, restore, migrations — implemented, NOT fully verified
 
 - Built: streaming zip backups (consistent SQLite snapshot + receipts + logos + checksummed manifest, written to a temporary name then renamed), daily automatic backup while the app is open (14 newest kept; manual and pre-restore backups never auto-deleted), restore that validates in staging (safe paths, checksums, integrity, future-schema refusal), a pre-restore safety backup, rollback on failure, all-or-nothing upgrades with a pre-upgrade copy, Backups screen, receipt-file check. Not encrypted.

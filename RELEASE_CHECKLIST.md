@@ -8,7 +8,7 @@ Status values are PASS, FAIL or NOT RUN, with evidence. **Gable is NOT release-r
 | 2 | Unit and integration tests | PASS (macOS): 239 tests | `npm test` |
 | 3 | Packaged-app end-to-end tests, macOS | PASS in the last full run (44/44), but flaky: see check 4 | `npm run test:e2e` |
 | 4 | Receipt reader starts reliably on relaunch | FAIL (intermittent) | About 2 in 8 isolated runs of the restart test stall; cause not found (BUILD_STATUS.md, open issue) |
-| 5 | Windows CI: tests, packaged tests, installer build | PASS for Stages 1–4 (commit `173ef9c`); Stages 5–7 not confirmed green | GitHub Actions |
+| 5 | Windows CI: tests, packaged tests, installer build | PASS on the latest commit `57ab498` for all stages, Windows and macOS (one run; earlier runs failed on the reader issue, so this is not yet proof of stability) | GitHub Actions |
 | 6 | Installer runs on a clean Windows machine (no dev tools) | NOT RUN | |
 | 7 | Standard (non-admin) account install and run | NOT RUN | |
 | 8 | Offline first launch and OCR on Windows | NOT RUN | |
