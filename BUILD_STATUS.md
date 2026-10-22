@@ -14,7 +14,7 @@ Last updated: 2026-10-22
 | 1 | Desktop foundation + packaging proof | Mac verified; Windows NOT RUN | Desktop runs; Windows path exists |
 | 2 | Design system + expense screen | Mac verified; owner visual review pending | Visual approval |
 | 3 | Companies, properties, search | Mac verified | |
-| 4 | Manual expenses, totals | Not started | Totals reconcile |
+| 4 | Manual expenses, totals | Mac verified | Totals reconcile |
 | 5 | Receipts + OCR | Not started | Saves time |
 | 6 | Dashboard, reports, exports | Not started | Exports reconcile |
 | 7 | Backup, restore, migrations | Not started | Full restore works |
@@ -61,6 +61,30 @@ Last updated: 2026-10-22
 - Fixture B "2026 expenses are $20,000" matches commission + seller closing.
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
+
+## Stage 4 evidence (2026-10-22)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Typecheck, lint | `npm run typecheck`, `npm run lint` | PASS |
+| Unit/integration (real SQLite) | `npm test` | PASS: 115 tests |
+| Guide fixture A (standard) | `tests/unit/expenses.test.ts` | PASS: project cost $268,000.00; profit $42,000.00; ROI 15.67% (1567 basis points); a $1,000 general company expense leaves the property unchanged and shows as company overhead; a $100 expense split $60 Materials + $40 Electrical counts exactly $100; three receipt pages on one expense never repeat the cost |
+| Guide fixture B (historical 2021 to 2026) | same | PASS: lifetime expenses $80,000; cost $280,000; profit $70,000; ROI 25.00%; six year rows; 2021 expenses $5,000 and investment $205,000; 2026 expenses $20,000 with commission and seller closing costs listed separately and $350,000 sale proceeds shown separately; a 2022-dated cost entered "in 2026" lands in 2022; editing its date moves annual totals while lifetime cost is unchanged; yearly expenses always reconcile to lifetime (also fuzz-tested with 60 random expenses, 10 voids) |
+| Days held | `tests/unit/duration.test.ts` and E2E | PASS: 1,885 days / 5 years 2 months and 424 days |
+| Edge cases | unit tests | PASS: zero-cost ROI is "Unavailable"; unsold shows investment to date and no profit/ROI; loss gives negative profit/ROI; malformed or negative currency and zero/negative/duplicate allocation lines rejected; sum mismatch rejected with nothing saved (no expense, vendor or file); company mismatch rejected in the service and by database triggers; no new expenses under archived company/property/category; archived categories stay readable in history; expenses cannot be deleted, only voided |
+| Idempotency | unit + E2E | PASS: same idempotency key twice gives one expense and one set of lines/files; a double click on Save creates exactly one expense |
+| Attachments | unit + E2E | PASS: stored by content type with opaque names; original can be deleted; HEIC, renamed, empty and over-25 MB files rejected with guidance; a failed save removes already-copied files and can be retried; removing a receipt deletes its file only after the edit is saved |
+| Void / history | unit + E2E | PASS: voided expenses disappear from every total and list (unless "Include voided"), stay on record with history, and can be restored |
+| Packaged-app E2E | `npm run test:e2e` | PASS: 29 tests. New: property detail numbers for both fixtures, annual breakdown and reconciliation, unsold property, adding an expense with receipts then restart, edit/void/restore recalculation, double-click save, category management, filters, stored receipts |
+
+Stage 4 decisions and limits:
+- ROI displays to two decimals ("25.00%", not "25%"), half away from zero, computed from integer cents.
+- Reporting-group mapping of starter categories: Materials, Labor, Plumbing, Electrical, Permits, Maintenance are Renovation; Utilities, Insurance, Property Taxes, Financing Interest & Fees are Holding; Purchase Closing Costs, Realtor Commissions, Seller Closing Costs, Other Selling Costs have their own groups; Other is "Other costs" and counts toward project cost. Confirm this mapping.
+- Years in By Year run from the earliest of purchase year or any expense year, through sale year (or today) or any later expense. An expense dated before the purchase year adds an earlier row.
+- "Open" on a saved receipt uses the system viewer (not tested by automation).
+- Annual filters are not built; the lifetime summary is always shown above both views and is unaffected by the view.
+- Expense Save no longer shows a preview notice. The Receipt Review page is still a preview with sample receipts until Stage 5.
+- Vendors are created implicitly by name per company; no category rule is created unless the user explicitly makes one (rules arrive in Stage 5).
 
 ## Stage 3 evidence (2026-10-22)
 

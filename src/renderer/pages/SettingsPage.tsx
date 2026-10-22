@@ -88,6 +88,13 @@ export function SettingsPage() {
             </div>
           )}
         </div>
+        <div className="panel narrow settings-link">
+          <div>
+            <h2 className="panel__title">Categories</h2>
+            <p className="muted">Customize the expense categories for each company and see how they roll up in reports.</p>
+          </div>
+          <Button variant="secondary" onClick={() => navigate('/settings/categories')}>Manage categories</Button>
+        </div>
         <label className="check">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           <span>Show archived companies</span>

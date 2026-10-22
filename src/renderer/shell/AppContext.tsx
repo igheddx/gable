@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { isDirty, setDirtyFlag } from './dirtyFlag';
 import { Button, Dialog } from '../components';
-import { RECEIPTS, type FxExpense, type FxReceipt, type ReceiptStatus } from '../fixtures';
+import { RECEIPTS, type FxReceipt, type ReceiptStatus } from '../fixtures';
 import { api, errorMessage, unwrap } from '../api';
 import type { Company } from '../../shared/types';
 
@@ -29,9 +29,6 @@ interface AppState {
   refreshCompanies: () => Promise<Company[]>;
   /** Pages with editable forms register whether they hold unsaved work. */
   setDirty: (dirty: boolean) => void;
-  /** Preview-only expense list until expenses are stored (next stage). */
-  expenses: FxExpense[];
-  addExpense: (e: Omit<FxExpense, 'id' | 'preview'>) => void;
   receipts: FxReceipt[];
   setReceiptStatus: (id: string, status: ReceiptStatus, suggestion?: FxReceipt['suggestion']) => void;
   companyName: (id: number) => string;
@@ -52,7 +49,6 @@ export function AppProvider({ children, onFirstRun }: { children: ReactNode; onF
   const [companies, setCompanies] = useState<Company[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [scope, setScopeState] = useState<CompanyScope | null>(null);
-  const [expenses, setExpenses] = useState<FxExpense[]>([]);
   const [receipts, setReceipts] = useState<FxReceipt[]>(RECEIPTS);
   const [pending, setPending] = useState<Pending | null>(null);
 
@@ -104,14 +100,13 @@ export function AppProvider({ children, onFirstRun }: { children: ReactNode; onF
         ? null
         : {
             route, navigate, companies, defaultCompanyId: companies.find((c) => c.isDefault)?.id ?? null,
-            scope: effectiveScope, setScope, refreshCompanies, setDirty, expenses,
-            addExpense: (e) => setExpenses((xs) => [{ ...e, id: `new${xs.length}`, preview: true }, ...xs]),
+            scope: effectiveScope, setScope, refreshCompanies, setDirty,
             receipts,
             setReceiptStatus: (id, status, suggestion) =>
               setReceipts((rs) => rs.map((r) => (r.id === id ? { ...r, status, suggestion: suggestion === undefined ? r.suggestion : suggestion } : r))),
             companyName: (id) => companies.find((c) => c.id === id)?.displayName ?? 'Archived company',
           },
-    [route, navigate, companies, effectiveScope, setScope, refreshCompanies, setDirty, expenses, receipts],
+    [route, navigate, companies, effectiveScope, setScope, refreshCompanies, setDirty, receipts],
   );
 
   const confirmDiscard = () => {

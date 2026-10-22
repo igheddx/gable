@@ -8,6 +8,7 @@ import { PropertiesPage } from './pages/PropertiesPage';
 import { PropertyEditPage } from './pages/PropertyEditPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { CategoriesPage } from './pages/CategoriesPage';
 import { CompanyEditPage } from './pages/CompanyEditPage';
 import { SetupPage } from './pages/SetupPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -29,13 +30,16 @@ function Routes() {
     case '/expenses':
       return <ExpensesPage />;
     case '/expenses/new':
-      return <ExpenseEntryPage key={route.query.toString()} />;
+    case '/expenses/edit':
+      return <ExpenseEntryPage key={route.path + route.query.toString()} />;
     case '/receipts/review':
       return <ReceiptReviewPage />;
     case '/reports':
       return <PlaceholderPage title="Reports" what="Property profit, sold-property performance and expense reports will be added in a later stage." />;
     case '/settings':
       return <SettingsPage />;
+    case '/settings/categories':
+      return <CategoriesPage />;
     case '/settings/company':
       return <CompanyEditPage key={route.query.toString()} />;
     case '/showcase':

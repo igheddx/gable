@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Pencil, Plus, ScanLine } from 'lucide-react';
 import { Badge, Button, ErrorState, Notice, type Tone } from '../components';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { GROUP_LABELS, REPORTING_GROUPS, SELLING_GROUPS, type ReportingGroup } from '../../shared/categories';
 import { PageHeader } from '../shell/Shell';
 import { useApp } from '../shell/AppContext';
 import { useToday } from '../shell/useToday';
 import { api, unwrap, useLoad } from '../api';
-import { formatCents } from '../../shared/money';
+import { formatBasisPoints, formatCents } from '../../shared/money';
 import { formatUsDate } from '../../shared/dates';
 import { daysBetween, formatYmd, ymdBetween } from '../../shared/duration';
-import type { Property } from '../../shared/types';
+import type { Property, PropertyFinancials, YearRow } from '../../shared/types';
 
 const TONE: Record<string, Tone> = { Held: 'neutral', Renovating: 'warning', Listed: 'info', Sold: 'success' };
 const UNAVAILABLE = <span className="muted" title="Not available yet">Unavailable</span>;
@@ -21,6 +23,7 @@ export function PropertyDetailPage() {
   const { route, navigate } = useApp();
   const id = Number(route.query.get('id'));
   const { data: p, error } = useLoad(() => unwrap(api().getProperty(id)), [id]);
+  const { data: fin } = useLoad(() => unwrap(api().getPropertyFinancials(id)), [id]);
   const [tab, setTab] = useState<'lifetime' | 'year'>('lifetime');
   const today = useToday();
 
@@ -54,7 +57,8 @@ export function PropertyDetailPage() {
           <button role="tab" aria-selected={tab === 'year'} onClick={() => setTab('year')}>By year</button>
         </div>
 
-        {tab === 'lifetime' ? <Lifetime p={p} sold={sold} days={days} readable={readable} /> : <ByYear p={p} sold={sold} endDate={endDate} />}
+        {fin && <Summary fin={fin} sold={sold} />}
+        {tab === 'lifetime' ? <Lifetime p={p} sold={sold} days={days} readable={readable} fin={fin} /> : fin ? <ByYear fin={fin} p={p} /> : null}
 
         {(p.description || p.notes) && (
           <div className="panel">
@@ -67,7 +71,44 @@ export function PropertyDetailPage() {
   );
 }
 
-function Lifetime({ p, sold, days, readable }: { p: Property; sold: boolean; days: number | null; readable: string | null }) {
+function Summary({ fin, sold }: { fin: PropertyFinancials; sold: boolean }) {
+  const b = fin.bridge;
+  return (
+    <section className="summary" aria-label="Lifetime summary">
+      <div className="summary__item">
+        <span className="summary__label">{sold ? 'Total project cost' : 'Recorded investment to date'}</span>
+        <span className="summary__value money num">{formatCents(b.projectCostCents)}</span>
+        <span className="muted">Purchase price plus {formatCents(b.expensesCents)} of expenses</span>
+      </div>
+      {sold ? (
+        <>
+          <div className="summary__item">
+            <span className="summary__label">Lifetime profit before taxes</span>
+            <span className={`summary__value money num${b.profitCents! < 0 ? ' is-loss' : ''}`}>{b.profitCents! < 0 ? '−' : ''}{formatCents(Math.abs(b.profitCents!))}{b.profitCents! < 0 && <span className="sr-only"> (loss)</span>}</span>
+            <span className="muted">Sale price minus total project cost</span>
+          </div>
+          <div className="summary__item">
+            <span className="summary__label">Return on cost</span>
+            <span className="summary__value num">{b.roiBasisPoints === null ? 'Unavailable' : formatBasisPoints(b.roiBasisPoints)}</span>
+            <span className="muted">Not annualized. Before taxes.</span>
+          </div>
+        </>
+      ) : (
+        <div className="summary__item">
+          <span className="summary__label">Profit and return</span>
+          <span className="summary__value summary__value--plain">Not available</span>
+          <span className="muted">They appear once the property is sold. No market value is estimated.</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const Money = ({ cents }: { cents: number }) => <td className="money num">{formatCents(cents)}</td>;
+
+function Lifetime({ p, sold, days, readable, fin }: { p: Property; sold: boolean; days: number | null; readable: string | null; fin: PropertyFinancials | null }) {
+  const g = fin?.bridge.groups;
+  const selling = g ? SELLING_GROUPS.reduce((a, k) => a + g[k], 0) : 0;
   return (
     <div className="detail-grid">
       <section className="panel" aria-label="Purchase and sale">
@@ -89,47 +130,122 @@ function Lifetime({ p, sold, days, readable }: { p: Property; sold: boolean; day
 
       <section className="panel" aria-label="Lifetime cost bridge">
         <h2 className="section-title">Lifetime cost</h2>
-        <table className="bridge">
-          <tbody>
-            <tr><th scope="row">Purchase price</th><td className="money num">{formatCents(p.purchasePriceCents)}</td></tr>
-            <tr><th scope="row">Purchase closing costs</th><td className="money">{UNAVAILABLE}</td></tr>
-            <tr><th scope="row">Renovation and repairs</th><td className="money">{UNAVAILABLE}</td></tr>
-            <tr><th scope="row">Holding costs</th><td className="money">{UNAVAILABLE}</td></tr>
-            <tr><th scope="row">Selling costs</th><td className="money">{UNAVAILABLE}</td></tr>
-            <tr className="bridge__total"><th scope="row">Total project cost</th><td className="money">{UNAVAILABLE}</td></tr>
-            {sold && <tr><th scope="row">Gross sale price</th><td className="money num">{formatCents(p.salePriceCents!)}</td></tr>}
-            <tr className="bridge__total"><th scope="row">Profit before taxes</th><td className="money">{UNAVAILABLE}</td></tr>
-          </tbody>
-        </table>
-        <p className="muted">Expenses are recorded in the next stage. Costs and profit appear here once they are, and are never shown as zero while unknown.{!sold && ' Profit and return apply only to sold properties.'}</p>
+        {!g ? <p className="muted">Loading…</p> : (
+          <table className="bridge">
+            <caption className="sr-only">From purchase price to profit</caption>
+            <tbody>
+              <tr><th scope="row">Purchase price</th><Money cents={p.purchasePriceCents} /></tr>
+              <tr><th scope="row">{GROUP_LABELS.purchase_closing}</th><Money cents={g.purchase_closing} /></tr>
+              <tr><th scope="row">{GROUP_LABELS.renovation}</th><Money cents={g.renovation} /></tr>
+              <tr><th scope="row">{GROUP_LABELS.holding}</th><Money cents={g.holding} /></tr>
+              <tr><th scope="row">Selling costs</th><Money cents={selling} /></tr>
+              {SELLING_GROUPS.map((k) => (
+                <tr key={k} className="bridge__sub"><th scope="row">{GROUP_LABELS[k]}</th><Money cents={g[k]} /></tr>
+              ))}
+              <tr><th scope="row">{GROUP_LABELS.other}</th><Money cents={g.other} /></tr>
+              <tr className="bridge__total"><th scope="row">{sold ? 'Total project cost' : 'Recorded investment to date'}</th><Money cents={fin!.bridge.projectCostCents} /></tr>
+              {sold && <tr><th scope="row">Gross sale price</th><Money cents={p.salePriceCents!} /></tr>}
+              {sold && <tr className="bridge__total"><th scope="row">Profit before taxes</th><Money cents={fin!.bridge.profitCents!} /></tr>}
+            </tbody>
+          </table>
+        )}
+        <p className="muted">Voided expenses are not counted.{!sold && ' Profit and return apply only to sold properties.'}</p>
       </section>
     </div>
   );
 }
 
-function ByYear({ p, sold, endDate }: { p: Property; sold: boolean; endDate: string }) {
-  const startYear = Number(p.purchaseDate.slice(0, 4));
-  const endYear = Math.max(startYear, Number(endDate.slice(0, 4)));
-  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+function YearDetail({ y, navigate, propertyId }: { y: YearRow; navigate: (to: string) => void; propertyId: number }) {
+  const byGroup = REPORTING_GROUPS.filter((k) => y.groups[k] > 0);
+  return (
+    <div className="year-detail">
+      {y.purchaseCents > 0 && <p className="muted">Purchase price {formatCents(y.purchaseCents)} is counted once, in the year of purchase.</p>}
+      {byGroup.length === 0 ? <p className="muted">No expenses recorded this year.</p> : (
+        <>
+          <table className="mini">
+            <caption className="sr-only">Expenses in {y.year} by category</caption>
+            <tbody>
+              {byGroup.map((k: ReportingGroup) => (
+                <Fragment key={k}>
+                  <tr className="mini__group"><th scope="row">{GROUP_LABELS[k]}</th><td className="money num">{formatCents(y.groups[k])}</td></tr>
+                  {(() => {
+                    const inGroup = y.categories.filter((c) => c.group === k);
+                    // A single category named like its group would only repeat the line above.
+                    return inGroup.length === 1 && inGroup[0]!.name.toLowerCase() === GROUP_LABELS[k].toLowerCase() ? [] : inGroup;
+                  })().map((c) => (
+                    <tr key={`${k}${c.categoryId}`} className="mini__cat"><th scope="row">{c.name}</th><td className="money num">{formatCents(c.cents)}</td></tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+          <table className="mini mini--items">
+            <caption className="sr-only">Expense records in {y.year}</caption>
+            <thead><tr><th scope="col">Date</th><th scope="col">Vendor</th><th scope="col">Category</th><th scope="col" className="is-right">Amount</th></tr></thead>
+            <tbody>
+              {y.items.map((i) => (
+                <tr key={i.expenseId}>
+                  <td className="num">{formatUsDate(i.date)}</td>
+                  <td><a className="link" href={`#/expenses/edit?id=${i.expenseId}`} onClick={(e) => { e.preventDefault(); navigate(`/expenses/edit?id=${i.expenseId}&return=${encodeURIComponent(`/properties/view?id=${propertyId}`)}`); }}>{i.vendorName}</a>{i.attachmentCount > 0 && <span className="muted"> · {i.attachmentCount} receipt{i.attachmentCount === 1 ? '' : 's'}</span>}</td>
+                  <td>{i.categories}</td>
+                  <td className="money num">{formatCents(i.totalCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ByYear({ fin, p }: { fin: PropertyFinancials; p: Property }) {
+  const { navigate } = useApp();
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const toggle = (y: number) => setOpen((s) => { const n = new Set(s); if (n.has(y)) n.delete(y); else n.add(y); return n; });
+  const allOpen = open.size === fin.byYear.length;
+  const r = fin.reconciliation;
   return (
     <section className="panel panel--flush" aria-label="By year">
+      <div className="byyear-head">
+        <p className="muted">Expenses exclude the purchase price. Investment is the purchase price (in its year) plus expenses. Sale proceeds are shown separately.</p>
+        <Button size="sm" variant="secondary" onClick={() => setOpen(allOpen ? new Set() : new Set(fin.byYear.map((y) => y.year)))}>{allOpen ? 'Collapse all' : 'Expand all'}</Button>
+      </div>
       <div className="table-wrap">
-        <table className="table">
+        <table className="table table--years">
           <caption className="sr-only">Recorded activity for each calendar year</caption>
-          <thead><tr><th scope="col">Year</th><th scope="col" className="is-right">Purchase price</th><th scope="col" className="is-right">Expenses</th><th scope="col" className="is-right">Sale proceeds</th></tr></thead>
+          <thead><tr><th scope="col">Year</th><th scope="col" className="is-right">Purchase price</th><th scope="col" className="is-right">Expenses</th><th scope="col" className="is-right">Investment</th><th scope="col" className="is-right">Sale proceeds</th></tr></thead>
           <tbody>
-            {years.map((y) => (
-              <tr key={y}>
-                <th scope="row" className="num">{y}</th>
-                <td className="money num">{y === startYear ? formatCents(p.purchasePriceCents) : <span className="muted">—</span>}</td>
-                <td className="money">{UNAVAILABLE}</td>
-                <td className="money num">{sold && y === Number(p.saleDate!.slice(0, 4)) ? formatCents(p.salePriceCents!) : <span className="muted">—</span>}</td>
-              </tr>
+            {fin.byYear.map((y) => (
+              <Fragment key={y.year}>
+                <tr className={y.expensesCents === 0 && y.purchaseCents === 0 && y.saleProceedsCents === 0 ? 'is-quiet' : undefined}>
+                  <th scope="row" className="num">
+                    <button className="expander" aria-expanded={open.has(y.year)} aria-controls={`year-${y.year}`} onClick={() => toggle(y.year)}>
+                      {open.has(y.year) ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                      {y.year}
+                    </button>
+                  </th>
+                  <td className="money num">{y.purchaseCents > 0 ? formatCents(y.purchaseCents) : <span className="muted">—</span>}</td>
+                  <td className="money num">{formatCents(y.expensesCents)}</td>
+                  <td className="money num">{formatCents(y.investmentCents)}</td>
+                  <td className="money num">{y.saleProceedsCents > 0 ? formatCents(y.saleProceedsCents) : <span className="muted">—</span>}</td>
+                </tr>
+                {open.has(y.year) && (
+                  <tr className="year-row" id={`year-${y.year}`}><td colSpan={5}><YearDetail y={y} navigate={navigate} propertyId={p.id} /></td></tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
+          <tfoot>
+            <tr><th scope="row">All years</th><td className="money num">{formatCents(fin.purchasePriceCents)}</td><td className="money num">{formatCents(r.yearsExpensesCents)}</td><td className="money num">{formatCents(fin.purchasePriceCents + r.yearsExpensesCents)}</td><td className="money num">{fin.salePriceCents !== null ? formatCents(fin.salePriceCents) : <span className="muted">—</span>}</td></tr>
+          </tfoot>
         </table>
       </div>
-      <p className="muted pad">Every year from purchase to {sold ? 'sale' : 'today'} is listed, including quiet years. Yearly expenses appear here once expenses are recorded. The purchase price is shown once, in the year of purchase.</p>
+      <p className="pad" role="status">
+        {r.matches
+          ? <>Reconciles: the yearly expenses add up to the lifetime expenses of {formatCents(r.lifetimeExpensesCents)}.</>
+          : <strong>The yearly expenses do not match the lifetime total. Please report this.</strong>}
+      </p>
     </section>
   );
 }

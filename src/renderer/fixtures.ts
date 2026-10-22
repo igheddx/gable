@@ -3,11 +3,6 @@
  * Replaced by real database records in later stages.
  */
 
-export interface FxExpense {
-  id: string; companyId: number; propertyId: number | null; vendor: string; date: string;
-  category: string; cents: number; preview?: boolean;
-}
-
 export const CATEGORIES = [
   'Materials', 'Labor', 'Plumbing', 'Electrical', 'Permits', 'Utilities', 'Insurance', 'Property Taxes',
   'Financing Interest & Fees', 'Maintenance', 'Purchase Closing Costs', 'Realtor Commissions',

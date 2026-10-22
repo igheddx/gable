@@ -17,7 +17,7 @@ test('opens, initializes the database, and reports app info over IPC', async () 
   const page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'Welcome to Gable' })).toBeVisible(); // first run: no companies yet
   const info = await page.evaluate(() => (window as any).gable.getAppInfo());
-  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 2 } });
+  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 3 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
   await app.close();
 });
@@ -35,10 +35,13 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
   expect(probe.api).toEqual(
     ['archiveCompany', 'archiveProperty', 'chooseCompanyLogo', 'clearCompanyLogo', 'createCompany', 'createProperty', 'getAppInfo',
       'getCompanyLogo', 'getProperty', 'getSetting', 'listCompanies', 'listProperties', 'restoreCompany', 'restoreProperty',
-      'setDefaultCompany', 'setSetting', 'updateCompany', 'updateProperty'],
+      'setDefaultCompany', 'setSetting', 'updateCompany', 'updateProperty'].concat(
+      ['archiveCategory', 'createCategory', 'createExpense', 'getExpense', 'getPropertyFinancials', 'listCategories', 'listExpenses',
+        'openReceipt', 'renameCategory', 'restoreCategory', 'setCategoryGroup', 'stageReceiptFile', 'suggestVendors', 'unvoidExpense',
+        'updateExpense', 'voidExpense']).sort(),
   );
   // Task-specific methods only: nothing that takes a SQL string, a file path, or a channel name.
-  expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|file(?!Logo)/i.test(k))).toBe(false);
+  expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|(?<!stageReceipt)file(?!s)/i.test(k))).toBe(false);
   await app.close();
 });
 

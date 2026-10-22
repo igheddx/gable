@@ -4,7 +4,9 @@ import { ApiError, api, errorMessage, unwrap } from '../api';
 import { useApp } from '../shell/AppContext';
 import { PROPERTY_STATUSES, type PropertyFields, type PropertyStatus } from '../../shared/schemas';
 import type { Property } from '../../shared/types';
-import { centsToInput, parseCurrency } from '../../shared/money';
+import { formatCents, parseCurrency } from '../../shared/money';
+
+const inputMoney = (c: number) => formatCents(c, { symbol: false });
 import { formatUsDate, parseUsDate } from '../../shared/dates';
 
 interface Props {
@@ -27,9 +29,9 @@ interface FormState {
 
 const fromProperty = (p?: Property): FormState => ({
   address1: p?.address1 ?? '', address2: p?.address2 ?? '', city: p?.city ?? '', state: p?.state ?? '', zip: p?.zip ?? '',
-  purchaseDate: p ? formatUsDate(p.purchaseDate) : '', purchasePrice: p ? centsToInput(p.purchasePriceCents) : '',
+  purchaseDate: p ? formatUsDate(p.purchaseDate) : '', purchasePrice: p ? inputMoney(p.purchasePriceCents) : '',
   status: p?.status ?? 'Held', saleDate: p?.saleDate ? formatUsDate(p.saleDate) : '',
-  salePrice: p?.salePriceCents != null ? centsToInput(p.salePriceCents) : '', description: p?.description ?? '', notes: p?.notes ?? '',
+  salePrice: p?.salePriceCents != null ? inputMoney(p.salePriceCents) : '', description: p?.description ?? '', notes: p?.notes ?? '',
 });
 
 export function PropertyForm({ companyId, property, submitLabel, onSaved, onCancel, cancelLabel = 'Cancel', extraAction }: Props) {

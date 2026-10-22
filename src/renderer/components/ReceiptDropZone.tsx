@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { FileText, UploadCloud, X } from 'lucide-react';
 import { Button } from './Button';
 
-export interface PickedFile { name: string; size: number }
+export interface PickedFile { name: string; size: number; file: File }
 
 const OK = /\.(jpe?g|png|pdf)$/i;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -32,7 +32,7 @@ export function ReceiptDropZone({ files, onChange, note }: Props) {
       if (/\.heic$/i.test(f.name)) bad.push(`${f.name}: HEIC photos are not supported yet. Save or export the photo as JPG, then add it again.`);
       else if (!OK.test(f.name)) bad.push(`${f.name}: only JPG, PNG and PDF files can be added.`);
       else if (f.size > MAX_FILE_BYTES) bad.push(`${f.name}: this file is larger than 25 MB.`);
-      else accepted.push({ name: f.name, size: f.size });
+      else accepted.push({ name: f.name, size: f.size, file: f });
     }
     setProblems(bad);
     if (accepted.length) onChange([...files, ...accepted]);

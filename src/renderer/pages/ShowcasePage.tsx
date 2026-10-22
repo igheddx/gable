@@ -22,7 +22,7 @@ const SWATCHES: [string, string, string][] = [
 export function ShowcasePage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [files, setFiles] = useState<PickedFile[]>([{ name: 'invoice-page-1.pdf', size: 245_000 }]);
+  const [files, setFiles] = useState<PickedFile[]>([{ name: 'invoice-page-1.pdf', size: 245_000, file: new File([], 'invoice-page-1.pdf') }]);
   const [lines, setLines] = useState<AllocLine[]>([{ category: 'Materials', amount: '60.00' }, { category: 'Electrical', amount: '25.00' }]);
   const [combo, setCombo] = useState('');
   const [vendor, setVendor] = useState('');
