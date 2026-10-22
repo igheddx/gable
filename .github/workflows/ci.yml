@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows x64 (test + installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # Packages the app and runs the Electron end-to-end tests against the packaged Gable.exe.
+      - run: npm run test:e2e
+      # Release-style build (inspect fuse off). Produces the Squirrel installer.
+      - run: npm run make:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gable-windows-x64-installer
+          path: out/make/**
+          if-no-files-found: error
+
+  macos:
+    name: macOS (test + package)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:e2e

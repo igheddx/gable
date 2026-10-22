@@ -4,14 +4,14 @@ Last updated: 2026-10-22
 
 ## Current stage
 
-**Stage 0 — Product contract: documents written. No application code exists.** Nothing has been built, run, or tested.
+**Stage 1 — Desktop foundation: implemented and verified on macOS (Intel, x64). Windows checks are NOT RUN.** Awaiting owner review gate: "Desktop runs; Windows build path exists".
 
 ## Stage tracker
 
 | Stage | Description | Status | Owner gate |
 | --- | --- | --- | --- |
-| 0 | Product contract & docs | Documents written; awaiting review | Review requirements |
-| 1 | Desktop foundation + packaging proof | Not started | Desktop runs; Windows path exists |
+| 0 | Product contract & docs | Done (committed 43e1afc) | Review requirements |
+| 1 | Desktop foundation + packaging proof | Mac verified; Windows NOT RUN | Desktop runs; Windows path exists |
 | 2 | Design system + expense screen | Not started | Visual approval |
 | 3 | Companies, properties, search | Not started | |
 | 4 | Manual expenses, totals | Not started | Totals reconcile |
@@ -27,6 +27,18 @@ Last updated: 2026-10-22
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-22 | 0 | Environment probe | `node -v`, `npm -v` | Node v20.18.0, npm 10.8.2 | Informational |
 | 2026-10-22 | 0 | Docs created | n/a | PRODUCT, DESIGN, ARCHITECTURE, TEST_PLAN, BUILD_STATUS written | Not reviewed by owner yet |
+| 2026-10-22 | 1 | Toolchain compatibility | `npm view` for electron, forge, vite, better-sqlite3 | Electron 45 / Forge 8 / Vitest 5 need Node >= 22.13; local Node 20.18 too old | Owner approved Node 22 via nvm (v22.23.4, side by side; nvm default alias set to 22 because none existed; /usr/local/bin/node untouched) |
+| 2026-10-22 | 1 | SQLite loads on both runtimes | Load `better-sqlite3` under Node 22 and `ELECTRON_RUN_AS_NODE` Electron 45 | PASS (SQLite 3.53.4 on Node ABI 127 and Electron/Node 24 ABI 150) | N-API prebuilds; no per-Electron compile |
+| 2026-10-22 | 1 | Typecheck | `npm run typecheck` | PASS | |
+| 2026-10-22 | 1 | Lint (incl. renderer import boundary) | `npm run lint` | PASS; a probe file importing `better-sqlite3`/`node:fs` in `src/renderer` was rejected by lint | probe removed |
+| 2026-10-22 | 1 | Unit/integration tests | `npm test` | PASS: 3 files, 20 tests | Real SQLite in temp dirs: init, reopen, migration rollback, future-schema refusal, parameterization, IPC validation, sender validation, paths |
+| 2026-10-22 | 1 | Local Mac package | `npm run package:mac` | PASS (`out/Gable-darwin-x64/Gable.app`, 261 MB) | Only `darwin-x64.node` shipped, unpacked from asar |
+| 2026-10-22 | 1 | Packaged-app E2E (Playwright, isolated data dir) | `npm run test:e2e` | PASS: 6/6 | Opens + DB initializes; renderer has no `require`/`process` and exposes only getAppInfo/getSetting/setSetting; malformed IPC rejected; data survives restart; second instance quits; CSP blocks inline script and network fetch |
+| 2026-10-22 | 1 | Dev startup | `npm run dev` | PASS: bundles built, window process started, data created under `.dev-data/default` | Window not visually inspected; no screenshots taken this stage |
+| 2026-10-22 | 1 | Demo database | `npm run demo:db` | PASS: created `.dev-data/demo/data/gable.db` | Fixture is only the demo marker; see limitations |
+| 2026-10-22 | 1 | Windows CI workflow | `.github/workflows/ci.yml` | NOT RUN | Config written, never executed; repo not pushed |
+| 2026-10-22 | 1 | Windows installer (`make:win`) | n/a | NOT RUN | Squirrel maker only builds on Windows |
+| 2026-10-22 | 1 | Windows packaged-app E2E / native module load | n/a | NOT RUN | Same tests are in CI; needs Windows run |
 
 ## Assumptions (Stage 0)
 
@@ -50,12 +62,23 @@ Last updated: 2026-10-22
 - Days held for 2021-01-15 → 2026-03-15 will be verified in code at Stage 4; the guide states 1,885 days / 5 years 2 months.
 - Fixture C: 2025-01-15 → 2026-03-15 is 424 days (365 + 59); consistent with the guide.
 
+## Stage 1 notes and limitations
+
+- Intel Mac (x86_64): macOS verification covers x64 only. `macos-latest` CI is arm64 and will exercise the `darwin-arm64` prebuild.
+- The demo database holds only the demo marker, because the schema has just a settings table. Fictional companies/properties come with their tables (Prompts 2-3). This is less than the "realistic fixture" the guide asks for and is deliberately deferred, not done.
+- Windows: ARM64 untested. Installer unsigned (publisher warning expected). Squirrel `electron-squirrel-startup` shortcut handling is untested until a Windows run.
+- Embedded ASAR integrity fuse is off for now (revisit in Stage 8).
+- Vite configs are `.mts` to avoid Vite's CJS-config deprecation warning.
+- Node 22 is required; documented in `README.md` and `.nvmrc`/`engines`.
+- Nothing pushed. Remote `origin` is set; CI cannot run until the owner pushes.
+
 ## Decisions (owner)
 
 - 2026-10-22: Product name is **Gable**.
 - 2026-10-22: **Single repository:** https://github.com/igheddx/gable (empty at time of decision). `gable-frontend` and `gable-backend` repos are not used; Gable has no hosted backend (offline Electron app, per the guide).
 - 2026-10-22: Owner has a Windows machine for testing. Develop on macOS; Windows is the primary target.
-- Local git initialised on `main` with `origin` set to the repo above. Nothing committed or pushed yet.
+- Local git initialised on `main` with `origin` set to the repo above.
+- 2026-10-22: Approved installing Node 22 via nvm for the toolchain.
 
 ## Open questions (none blocking Stage 1)
 
@@ -65,5 +88,6 @@ Last updated: 2026-10-22
 
 ## Next steps
 
-1. Review the five documents; request corrections with the reusable correction prompt if needed.
-2. Tell Claude Code to run **Prompt 1** (desktop foundation and early packaging proof).
+1. Push to GitHub (on your instruction) so the Windows CI job runs; or run the commands in `README.md` on your Windows PC.
+2. Report the Windows results here; they are NOT RUN until then.
+3. Then run **Prompt 2** (design system and expense screen).

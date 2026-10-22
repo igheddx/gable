@@ -10,3 +10,5 @@ out/
 /data/
 /.dev-data/
 /.test-data/
+test-results/
+playwright-report/

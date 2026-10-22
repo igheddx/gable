@@ -1,6 +1,15 @@
 # ARCHITECTURE.md — Gable
 
-Status: planned. Versions are NOT yet chosen; they will be verified against official docs in Prompt 1, pinned, and recorded here with a lockfile.
+Status: foundation implemented (Prompt 1). Versions are pinned exactly in `package.json` (`.npmrc` sets `save-exact`) with `package-lock.json` committed.
+
+Decisions made in Prompt 1 (verified in code, see BUILD_STATUS.md):
+- Electron 45, Electron Forge 8 (Vite plugin), Vite 8, TypeScript 5.9 (TypeScript 7 was not used to keep lint tooling compatible), Vitest 5, Playwright. Node >= 22.13 is required by Electron/Forge/Vitest.
+- `better-sqlite3` 13 ships N-API prebuilt binaries (stable across Node and Electron), so there is no per-Electron compile. Forge's rebuild is disabled (`rebuildConfig.onlyModules: []`), the module is copied into the package by a `packageAfterCopy` hook (only the matching platform prebuild), and `.node` files are unpacked from asar. Loading was verified under Node 22, Electron 45 as Node, and the packaged macOS app.
+- Windows installer: Squirrel.Windows maker (per-user Setup.exe, no admin needed). MSI/WiX was not chosen.
+- Main/preload bundles are `.vite/build/main.cjs` and `preload.cjs`.
+- Electron fuses: RunAsNode off, NODE_OPTIONS off, cookie encryption on, OnlyLoadAppFromAsar on; the inspect-arguments fuse is on only for `GABLE_E2E=1` builds so Playwright can attach.
+- CSP is applied from the main process (response header), stricter in the built app than in dev.
+- Data location: packaged = OS per-user folder; dev = `.dev-data/default` in the repo; `GABLE_DATA_DIR` overrides.
 
 ## 1. Stack
 
