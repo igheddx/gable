@@ -138,8 +138,7 @@
 .boot { display: grid; place-items: center; height: 100%; padding: var(--s-5); }
 .setup { min-height: 100%; display: grid; place-items: start center; padding: var(--s-6) var(--s-4); overflow: auto; height: 100%; }
 .setup__card { width: min(680px, 100%); display: flex; flex-direction: column; gap: var(--s-4); }
-.setup__brand { display: flex; align-items: center; gap: var(--s-2); font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: 600; color: var(--ink); }
-.setup__brand svg { color: var(--brass); }
+.setup__logo { display: block; width: 220px; max-width: 70%; height: auto; }
 .setup__title { font-family: var(--font-serif); font-size: var(--fs-2xl); font-weight: 600; line-height: var(--lh-tight); }
 .steps { display: flex; gap: var(--s-4); list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); color: var(--text-muted); }
 .steps li { display: inline-flex; gap: 6px; align-items: center; padding-bottom: 4px; border-bottom: 2px solid transparent; }

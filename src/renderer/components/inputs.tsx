@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Field } from './Field';
 import { formatCents, parseCurrency } from '../../shared/money';
-import { formatUsDate, parseUsDate } from '../../shared/dates';
+import { formatDateTyping, formatUsDate, parseUsDate } from '../../shared/dates';
 
 type CommonProps = {
   label: string;
@@ -79,7 +79,7 @@ interface DateProps extends CommonProps {
 }
 
 export const DateField = forwardRef<HTMLInputElement, DateProps>(function DateField(
-  { label, optional, required, hint = 'MM/DD/YYYY', error, badge, className, value, onChange, onBlur, disabled },
+  { label, optional, required, hint = 'Type the numbers, like 03152024. Slashes are added for you.', error, badge, className, value, onChange, onBlur, disabled },
   ref,
 ) {
   return (
@@ -93,7 +93,8 @@ export const DateField = forwardRef<HTMLInputElement, DateProps>(function DateFi
           placeholder="MM/DD/YYYY"
           value={value}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
+          maxLength={10}
+          onChange={(e) => onChange(formatDateTyping(e.target.value, e.target.value.length < value.length))}
           onBlur={() => {
             const r = parseUsDate(value);
             if (r.ok) onChange(formatUsDate(r.iso));

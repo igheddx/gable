@@ -3,7 +3,7 @@ import { Building2, Home } from 'lucide-react';
 import { CompanyForm } from '../components/CompanyForm';
 import { PropertyForm } from '../components/PropertyForm';
 import { Button } from '../components';
-import { GableMark } from '../shell/Shell';
+import logoUrl from '../assets/gable-logo.png';
 import { useApp } from '../shell/AppContext';
 import type { Company } from '../../shared/types';
 
@@ -24,7 +24,7 @@ export function SetupPage() {
   return (
     <div className="setup">
       <div className="setup__card panel">
-        <div className="setup__brand"><GableMark size={28} /><span>Gable</span></div>
+        <img className="setup__logo" src={logoUrl} alt="Gable: every property, every cost" />
         <ol className="steps" aria-label="Setup steps">
           <li aria-current={company ? undefined : 'step'}><Building2 size={16} aria-hidden="true" /> Your company</li>
           <li aria-current={company ? 'step' : undefined}><Home size={16} aria-hidden="true" /> First property</li>

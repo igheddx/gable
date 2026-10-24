@@ -39,3 +39,41 @@ export function todayIso(now: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
+
+/**
+ * Formats a date as it is typed: the person enters only digits and the slashes appear on their own.
+ * "3" becomes "03/", "0315" becomes "03/15/", "03152024" becomes "03/15/2024". A single digit that cannot
+ * start a month (2-9) or a day (4-9) is padded with a zero. Typed separators (/ - . or space) are accepted
+ * and pad a one-digit part ("3/5/2024" becomes "03/05/2024"). A pasted ISO date (2024-03-15) is converted.
+ * While deleting, no trailing slash is added, so Backspace works normally.
+ */
+export function formatDateTyping(raw: string, deleting = false): string {
+  const text = raw.trim();
+  const iso = ISO.exec(text);
+  if (iso) return `${iso[2]}/${iso[3]}/${iso[1]}`;
+
+  const fields = ['', '', ''];
+  let idx = 0;
+  const firstDigitMax = [1, 3];
+  for (const ch of text) {
+    if (ch >= '0' && ch <= '9') {
+      if (idx < 2) {
+        if (fields[idx] === '' && Number(ch) > firstDigitMax[idx]!) {
+          fields[idx] = `0${ch}`;
+          idx++;
+        } else {
+          fields[idx] += ch;
+          if (fields[idx]!.length === 2) idx++;
+        }
+      } else if (fields[2]!.length < 4) {
+        fields[2] += ch;
+      }
+    } else if (idx < 2 && fields[idx] !== '') {
+      if (fields[idx]!.length === 1) fields[idx] = `0${fields[idx]}`;
+      idx++;
+    }
+  }
+  let out = fields.slice(0, Math.min(idx, 2) + 1).join('/');
+  if (deleting && out.endsWith('/')) out = out.slice(0, -1);
+  return out;
+}

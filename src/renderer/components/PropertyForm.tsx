@@ -8,6 +8,7 @@ import { formatCents, parseCurrency } from '../../shared/money';
 
 const inputMoney = (c: number) => formatCents(c, { symbol: false });
 import { formatUsDate, parseUsDate } from '../../shared/dates';
+import { US_STATE_CODES } from '../../shared/usStates';
 
 interface Props {
   /** Required when creating. Fixed once the property exists. */
@@ -59,7 +60,7 @@ export function PropertyForm({ companyId, property, submitLabel, onSaved, onCanc
     const pp = v.purchasePrice.trim() === '' ? null : (v.purchasePrice.trim() === '0' ? { ok: true as const, cents: 0 } : parseCurrency(v.purchasePrice));
     if (v.address1.trim() === '') e.address1 = 'Enter the street address.';
     if (v.city.trim() === '') e.city = 'Enter the city.';
-    if (!/^[A-Za-z]{2}$/.test(v.state.trim())) e.state = 'Use the 2-letter state code, like TN.';
+    if (!/^[A-Za-z]{2}$/.test(v.state.trim())) e.state = 'Choose a state.';
     if (!/^\d{5}(-\d{4})?$/.test(v.zip.trim())) e.zip = 'Enter a ZIP code like 37201.';
     if (!pd.ok) e.purchaseDate = pd.message;
     if (pp === null) e.purchasePrice = 'Enter the purchase price.';
@@ -132,7 +133,12 @@ export function PropertyForm({ companyId, property, submitLabel, onSaved, onCanc
         <TextField className="span-2" label="Unit or suite" optional value={v.address2} onChange={set('address2')} maxLength={80} />
         <TextField label="City" required value={v.city} onChange={set('city')} error={errors.city} maxLength={80} />
         <div className="form-grid form-grid--tight">
-          <TextField label="State" required value={v.state} onChange={set('state')} error={errors.state} maxLength={2} placeholder="TN" />
+          <SelectField label="State" required value={v.state.toUpperCase()} onChange={set('state')} error={errors.state}>
+            <option value="">Select</option>
+            {[...new Set([...(v.state && !US_STATE_CODES.includes(v.state.toUpperCase() as never) ? [v.state.toUpperCase()] : []), ...US_STATE_CODES])].map((code) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </SelectField>
           <TextField label="ZIP" required value={v.zip} onChange={set('zip')} error={errors.zip} maxLength={10} inputMode="numeric" />
         </div>
         <DateField label="Purchase date" required value={v.purchaseDate} onChange={(t) => setV((x) => ({ ...x, purchaseDate: t }))} error={errors.purchaseDate} hint="Any date, including years ago." />

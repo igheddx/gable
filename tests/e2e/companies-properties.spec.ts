@@ -13,9 +13,13 @@ test('first run: create the first company, then the first property', async () =>
   await expect(page.getByRole('heading', { name: 'Add your first property' })).toBeVisible();
   await page.getByRole('textbox', { name: /Street address/ }).fill('12 Maple Row');
   await page.getByRole('textbox', { name: /^City/ }).fill('Riverton');
-  await page.getByRole('textbox', { name: /^State/ }).fill('tn');
+  await page.getByRole('combobox', { name: /^State/ }).selectOption('TN');
   await page.getByRole('textbox', { name: /^ZIP/ }).fill('37201');
-  await page.getByRole('textbox', { name: /Purchase date/ }).fill('1/15/2021');
+  // Only digits are typed; the slashes appear on their own.
+  const purchaseDate = page.getByRole('textbox', { name: /Purchase date/ });
+  await purchaseDate.pressSequentially('01152021');
+  await expect(purchaseDate).toHaveValue('01/15/2021');
+  await expect(page.getByRole('combobox', { name: /^State/ }).locator('option')).toHaveCount(52); // Select + 50 states + DC
   await page.getByRole('textbox', { name: /Purchase price/ }).fill('200,000');
   await page.getByRole('button', { name: 'Save property' }).click();
   await expect(page.getByRole('heading', { name: '12 Maple Row' })).toBeVisible();

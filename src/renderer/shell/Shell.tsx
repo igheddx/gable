@@ -1,3 +1,4 @@
+import markUrl from '../assets/gable-mark.png';
 import type { ReactNode } from 'react';
 import { BarChart3, Building2, FileText, Home, Receipt, Settings as SettingsIcon, Palette } from 'lucide-react';
 import { useApp } from './AppContext';
@@ -67,14 +68,9 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Original mark: a simple gable roofline. */
-export function GableMark({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 20 12 5l9 15" />
-      <path d="M8.5 20h7" />
-    </svg>
-  );
+/** The Gable app mark (same artwork as the desktop icon). */
+export function GableMark({ size = 28 }: { size?: number }) {
+  return <img src={markUrl} width={size} height={size} alt="" />;
 }
 
 export function PageHeader({ title, context, actions }: { title: string; context?: ReactNode; actions?: ReactNode }) {
