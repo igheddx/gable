@@ -9,7 +9,7 @@ const root = os.tmpdir();
 let printed = 0;
 for (const name of fs.readdirSync(root)) {
   if (!name.startsWith('gable-')) continue;
-  const log = path.join(root, name, 'logs', 'gable.log');
+  const log = path.join(root, name, 'data', 'logs', 'gable.log');
   if (!fs.existsSync(log)) continue;
   const lines = fs.readFileSync(log, 'utf8').trim().split('\n');
   console.log(`::error title=gable.log in ${name}::${escape(lines.slice(-45).join('\n'))}`);
