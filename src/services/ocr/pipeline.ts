@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas, DOMMatrix, ImageData, loadImage, Path2D } from '@napi-rs/canvas';
 // pdf.js is bundled into the reader (not loaded as a separate module at run time), together with its page
 // engine, which it looks for on globalThis. Fewer moving parts in the reader process.
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -105,6 +105,13 @@ export class OcrPipeline {
   }
 
   private lib(): PdfJs {
+    // pdf.js draws with Path2D and DOMMatrix. It only installs them itself when it decides it is running in plain
+    // Node, which it does not in Electron's reader process, so they are provided here. Without them a page that uses
+    // clipping fails to draw ("Path2D is not defined"), which showed up as a missing preview on Windows.
+    const g = globalThis as unknown as Record<string, unknown>;
+    g.Path2D ??= Path2D;
+    g.DOMMatrix ??= DOMMatrix;
+    g.ImageData ??= ImageData;
     (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
     return pdfjsLib as unknown as PdfJs;
   }

@@ -12,7 +12,7 @@ for (const name of fs.readdirSync(root)) {
   const log = path.join(root, name, 'data', 'logs', 'gable.log');
   if (!fs.existsSync(log)) continue;
   const lines = fs.readFileSync(log, 'utf8').trim().split('\n');
-  console.log(`::error title=gable.log in ${name}::${escape(lines.slice(-45).join('\n'))}`);
+  console.log(`::error title=gable.log in ${name}::${escape(lines.slice(-70).join('\n'))}`);
   if (++printed >= 6) break;
 }
 if (!printed) console.log('::notice title=gable.log::no Gable logs were left behind');

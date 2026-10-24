@@ -92,6 +92,7 @@ async function renderPdf(html: string, opts: { landscape: boolean; footerTemplat
 }
 let db: Db | null = null;
 let ocr: PoolExecutor | null = null;
+let diag: (message: string) => void = () => {};
 
 /**
  * While Gable is reading receipts (or making a backup) it must not be put to sleep by the operating system.
@@ -183,6 +184,9 @@ if (!app.requestSingleInstanceLock()) {
     const workerFile = path.join(__dirname, 'ocrWorker.cjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
     const logger = createLogger(path.join(paths.root, 'logs'));
     logger.log(`start gable ${app.getVersion()} ${process.platform} ${process.arch}`);
+    diag = (m) => logger.log(m);
+    process.on('uncaughtException', (e) => logger.log(`uncaught exception: ${e instanceof Error ? e.stack ?? e.message : String(e)}`));
+    process.on('unhandledRejection', (e) => logger.log(`unhandled rejection: ${e instanceof Error ? e.stack ?? e.message : String(e)}`));
     // Diagnostics: note it in the log if the main process stops running its timers for a while.
     let lastBeat = Date.now();
     setInterval(() => {
@@ -308,12 +312,17 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit();
   });
   app.on('before-quit', () => {
+    diag('quit: starting');
     backupManager?.stopScheduler();
     void ocr?.shutdown();
+    diag('quit: readers stopped');
     db?.close();
     db = null;
+    diag('quit: database closed');
     // A reading thread stuck in native code cannot be stopped politely and would keep Gable running
     // in the background after its window closes. Give it a moment, then exit for real.
-    setTimeout(() => app.exit(0), 3000).unref();
+    setTimeout(() => { diag('quit: forcing exit'); app.exit(0); }, 3000).unref();
   });
+  app.on('will-quit', () => diag('quit: will-quit'));
+  app.on('quit', () => diag('quit: done'));
 }

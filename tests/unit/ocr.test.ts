@@ -119,6 +119,22 @@ describe('previews', () => {
     expect([...b.png.slice(0, 4)]).toEqual(sig);
     expect(b.pageCount).toBe(2);
   }, 60_000);
+
+  it('draws PDF pages in a process where pdf.js did not install Path2D and DOMMatrix itself', async () => {
+    // This is how Electron's reader process starts. A Windows run failed with "Path2D is not defined".
+    const g = globalThis as Record<string, unknown>;
+    delete g.Path2D;
+    delete g.DOMMatrix;
+    const fresh = new InlineExecutor(resources);
+    try {
+      for (const f of [fx.digitalPdf, fx.scannedPdf]) {
+        const r = await fresh.run('preview', { path: f, mime: 'application/pdf', page: 1, maxWidth: 400 });
+        expect([...r.png.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+      }
+    } finally {
+      await fresh.shutdown();
+    }
+  }, 60_000);
 });
 
 describe('cancellation', () => {
