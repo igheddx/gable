@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, powerSaveBlocker, session, shell, utilityProcess } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import squirrelStartup from 'electron-squirrel-startup';
+import { handleSquirrelEvent } from './squirrel';
 import { openDatabase, type Db } from '../db/connection';
 import { AppService } from '../services/appService';
 import { CompanyService } from '../services/companyService';
@@ -26,7 +26,7 @@ import { isTrustedSender, registerIpc } from './ipc';
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
-if (process.platform === 'win32' && squirrelStartup) app.quit();
+if (handleSquirrelEvent()) app.quit();
 
 // Choose the data root before anything reads app.getPath('userData'),
 // including the single-instance lock.
