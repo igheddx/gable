@@ -1,16 +1,18 @@
 import { Fragment, useState } from 'react';
-import { FileBarChart, Pencil, Plus, ScanLine } from 'lucide-react';
-import { Badge, Button, ErrorState, Notice, type Tone } from '../components';
+import { Banknote, FileBarChart, Pencil, Plus, ScanLine } from 'lucide-react';
+import { Badge, Button, ErrorState, Notice, useToast, type Tone } from '../components';
+import { IncomeDialog } from '../components/IncomeDialog';
+import { TEMPLATE_INFO, statusLabel } from '../../shared/businessTypes';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { GROUP_LABELS, REPORTING_GROUPS, SELLING_GROUPS, type ReportingGroup } from '../../shared/categories';
 import { PageHeader } from '../shell/Shell';
 import { useApp } from '../shell/AppContext';
 import { useToday } from '../shell/useToday';
-import { api, unwrap, useLoad } from '../api';
+import { api, errorMessage, unwrap, useLoad } from '../api';
 import { formatBasisPoints, formatCents } from '../../shared/money';
 import { formatUsDate } from '../../shared/dates';
 import { daysBetween, formatYmd, ymdBetween } from '../../shared/duration';
-import type { Property, PropertyFinancials, YearRow } from '../../shared/types';
+import type { CashFlow, CashFlowYear, Income, Property, PropertyFinancials, YearRow } from '../../shared/types';
 
 const TONE: Record<string, Tone> = { Held: 'neutral', Renovating: 'warning', Listed: 'info', Sold: 'success' };
 const UNAVAILABLE = <span className="muted" title="Not available yet">Unavailable</span>;
@@ -23,43 +25,38 @@ export function PropertyDetailPage() {
   const { route, navigate } = useApp();
   const id = Number(route.query.get('id'));
   const { data: p, error } = useLoad(() => unwrap(api().getProperty(id)), [id]);
-  const { data: fin } = useLoad(() => unwrap(api().getPropertyFinancials(id)), [id]);
-  const [tab, setTab] = useState<'lifetime' | 'year'>('lifetime');
-  const today = useToday();
+  const [addingIncome, setAddingIncome] = useState(false);
+  const [version, setVersion] = useState(0);
+  const toast = useToast();
 
-  if (error) return <div className="page-body"><ErrorState title="Could not open property" action={<Button onClick={() => navigate('/properties')}>Back to properties</Button>}>{error}</ErrorState></div>;
+  if (error) return <div className="page-body"><ErrorState title="Could not open this item" action={<Button onClick={() => navigate('/properties')}>Back to assets</Button>}>{error}</ErrorState></div>;
   if (!p) return null;
 
-  const sold = p.status === 'Sold' && p.saleDate !== null;
-  const endDate = sold ? p.saleDate! : today;
-  const afterToday = p.purchaseDate > endDate; // purchase recorded in the future
-  const days = afterToday ? null : daysBetween(p.purchaseDate, endDate);
-  const readable = afterToday ? null : formatYmd(ymdBetween(p.purchaseDate, endDate));
+  const info = TEMPLATE_INFO[p.template];
+  const locked = p.isArchived || p.companyArchived;
+  const context = info.hasAddress
+    ? <>{p.city}, {p.state} {p.zip} · {p.companyName}</>
+    : <>{p.businessTypeName}{p.identifier ? ` · ${p.identifier}` : ''} · {p.companyName}</>;
 
   return (
     <>
       <PageHeader
         title={p.address1 + (p.address2 ? `, ${p.address2}` : '')}
-        context={<>{p.city}, {p.state} {p.zip} · {p.companyName} · <Badge tone={TONE[p.status]!} icon={false}>{p.status}</Badge>{p.isArchived && <> <Badge tone="neutral" icon={false}>Archived</Badge></>}</>}
+        context={<>{context} · <Badge tone={TONE[p.status]!} icon={false}>{statusLabel(p.template, p.status)}</Badge>{p.isArchived && <> <Badge tone="neutral" icon={false}>Archived</Badge></>}</>}
         actions={
           <>
-            <Button variant="secondary" icon={<ScanLine size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/receipts/review?property=${p.id}&add=1`)}>Add receipts</Button>
+            <Button variant="secondary" icon={<ScanLine size={16} aria-hidden="true" />} disabled={locked} onClick={() => navigate(`/receipts/review?property=${p.id}&add=1`)}>Add receipts</Button>
             <Button variant="secondary" icon={<FileBarChart size={16} aria-hidden="true" />} onClick={() => navigate(`/reports?kind=property&property=${p.id}`)}>Report</Button>
             <Button variant="secondary" icon={<Pencil size={16} aria-hidden="true" />} onClick={() => navigate(`/properties/edit?id=${p.id}`)}>Edit</Button>
-            <Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} disabled={p.isArchived || p.companyArchived} onClick={() => navigate(`/expenses/new?property=${p.id}`)}>Add expense</Button>
+            {info.tracksIncome && <Button variant="secondary" icon={<Banknote size={16} aria-hidden="true" />} disabled={locked} onClick={() => setAddingIncome(true)}>Add income</Button>}
+            <Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} disabled={locked} onClick={() => navigate(`/expenses/new?property=${p.id}`)}>Add expense</Button>
           </>
         }
       />
       <div className="page-body">
-        {(p.isArchived || p.companyArchived) && <Notice>{p.isArchived ? 'This property is archived.' : `${p.companyName} is archived.`} Its history is kept, and new expenses cannot be added.</Notice>}
+        {locked && <Notice>{p.isArchived ? 'This item is archived.' : `${p.companyName} is archived.`} Its history is kept, and new expenses and income cannot be added.</Notice>}
 
-        <div className="tabs" role="tablist" aria-label="Property views">
-          <button role="tab" aria-selected={tab === 'lifetime'} onClick={() => setTab('lifetime')}>Lifetime</button>
-          <button role="tab" aria-selected={tab === 'year'} onClick={() => setTab('year')}>By year</button>
-        </div>
-
-        {fin && <Summary fin={fin} sold={sold} />}
-        {tab === 'lifetime' ? <Lifetime p={p} sold={sold} days={days} readable={readable} fin={fin} /> : fin ? <ByYear fin={fin} p={p} /> : null}
+        {info.tracksIncome ? <CashFlowView p={p} version={version} onChanged={() => setVersion((v) => v + 1)} /> : <ProfitView p={p} />}
 
         {(p.description || p.notes) && (
           <div className="panel">
@@ -68,7 +65,182 @@ export function PropertyDetailPage() {
           </div>
         )}
       </div>
+      {info.tracksIncome && (
+        <IncomeDialog open={addingIncome} onClose={() => setAddingIncome(false)} companyId={p.companyId} items={[p]} presetPropertyId={p.id}
+          onSaved={() => { setAddingIncome(false); setVersion((v) => v + 1); toast('Income added.'); }} />
+      )}
     </>
+  );
+}
+
+/** Purchase, sale, cost, profit and return: renovations and buy-and-sell items. */
+function ProfitView({ p }: { p: Property }) {
+  const { data: fin } = useLoad(() => unwrap(api().getPropertyFinancials(p.id)), [p.id]);
+  const [tab, setTab] = useState<'lifetime' | 'year'>('lifetime');
+  const today = useToday();
+
+  const sold = p.status === 'Sold' && p.saleDate !== null;
+  const start = p.purchaseDate ?? p.saleDate ?? today;
+  const endDate = sold ? p.saleDate! : today;
+  const afterToday = start > endDate; // purchase recorded in the future
+  const days = afterToday ? null : daysBetween(start, endDate);
+  const readable = afterToday ? null : formatYmd(ymdBetween(start, endDate));
+
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Property views">
+        <button role="tab" aria-selected={tab === 'lifetime'} onClick={() => setTab('lifetime')}>Lifetime</button>
+        <button role="tab" aria-selected={tab === 'year'} onClick={() => setTab('year')}>By year</button>
+      </div>
+      {fin && <Summary fin={fin} sold={sold} />}
+      {tab === 'lifetime' ? <Lifetime p={p} sold={sold} days={days} readable={readable} fin={fin} /> : fin ? <ByYear fin={fin} p={p} /> : null}
+    </>
+  );
+}
+
+/** Income against expenses: rentals and ongoing businesses. */
+function CashFlowView({ p, version, onChanged }: { p: Property; version: number; onChanged: () => void }) {
+  const toast = useToast();
+  const { data: flow } = useLoad(() => unwrap(api().getPropertyCashFlow(p.id)), [p.id, version]);
+  const { data: entries, reload } = useLoad(() => unwrap(api().listIncome({ scope: p.companyId, propertyId: p.id, includeVoided: true, pageSize: 100 })), [p.id, version]);
+  const [editing, setEditing] = useState<Income | null>(null);
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const locked = p.isArchived || p.companyArchived;
+
+  const act = async (fn: () => Promise<unknown>, ok: string) => {
+    try { await fn(); toast(ok); onChanged(); reload(); } catch (e) { toast(errorMessage(e), 'error'); }
+  };
+
+  return (
+    <>
+      {flow && (
+        <section className="summary" aria-label="Income and expenses">
+          <div className="summary__item">
+            <span className="summary__label">Income received</span>
+            <span className="summary__value money num">{formatCents(flow.incomeCents)}</span>
+            <span className="muted">All time, voided entries excluded</span>
+          </div>
+          <div className="summary__item">
+            <span className="summary__label">Expenses paid</span>
+            <span className="summary__value money num">{formatCents(flow.expensesCents)}</span>
+            <span className="muted">All time, voided entries excluded</span>
+          </div>
+          <div className="summary__item">
+            <span className="summary__label">Net income</span>
+            <span className={`summary__value money num${flow.netCents < 0 ? ' is-loss' : ''}`}>{flow.netCents < 0 ? '−' : ''}{formatCents(Math.abs(flow.netCents))}{flow.netCents < 0 && <span className="sr-only"> (loss)</span>}</span>
+            <span className="muted">Income minus expenses, before taxes</span>
+          </div>
+        </section>
+      )}
+
+      {flow && <CashFlowByYear flow={flow} open={open} setOpen={setOpen} />}
+
+      <section className="panel panel--flush" aria-label="Income entries">
+        <h2 className="report-table__title">Income entries</h2>
+        {entries && entries.rows.length === 0 ? (
+          <p className="pad muted">No income recorded yet. Use Add income when rent or other money comes in.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <caption className="sr-only">Income entries</caption>
+              <thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">Notes</th><th scope="col" className="is-right">Amount</th><th scope="col" className="is-right">Actions</th></tr></thead>
+              <tbody>
+                {(entries?.rows ?? []).map((i) => (
+                  <tr key={i.id} className={i.status === 'voided' ? 'is-voided' : undefined}>
+                    <td className="num">{formatUsDate(i.incomeDate)}</td>
+                    <td>{i.category} {i.status === 'voided' && <Badge tone="neutral" small icon={false}>Voided</Badge>}</td>
+                    <td className="truncate" title={i.notes}>{i.notes}</td>
+                    <td className="money num">{formatCents(i.amountCents)}</td>
+                    <td className="is-right">
+                      <div className="row-actions">
+                        {i.status === 'posted' && <Button size="sm" variant="ghost" disabled={locked} aria-label={`Edit income of ${formatCents(i.amountCents)} on ${formatUsDate(i.incomeDate)}`} onClick={() => setEditing(i)}>Edit</Button>}
+                        {i.status === 'posted'
+                          ? <Button size="sm" variant="ghost" disabled={locked} aria-label={`Void income of ${formatCents(i.amountCents)} on ${formatUsDate(i.incomeDate)}`} onClick={() => void act(() => unwrap(api().voidIncome(i.id)), 'Income voided. It no longer counts.')}>Void</Button>
+                          : <Button size="sm" variant="ghost" disabled={locked} aria-label={`Restore income of ${formatCents(i.amountCents)} on ${formatUsDate(i.incomeDate)}`} onClick={() => void act(() => unwrap(api().unvoidIncome(i.id)), 'Income restored.')}>Restore</Button>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {(p.purchaseDate || p.purchasePriceCents !== null) && (
+        <section className="panel" aria-label="Purchase">
+          <h2 className="section-title">Purchase</h2>
+          <dl className="facts">
+            {p.purchaseDate && <Fact label="Purchased">{formatUsDate(p.purchaseDate)}</Fact>}
+            {p.purchasePriceCents !== null && <Fact label="Purchase price"><span className="money num">{formatCents(p.purchasePriceCents)}</span></Fact>}
+            {p.status === 'Sold' && p.saleDate && <Fact label="Sold">{formatUsDate(p.saleDate)}{p.salePriceCents !== null && <> for <span className="money num">{formatCents(p.salePriceCents)}</span></>}</Fact>}
+          </dl>
+          <p className="muted">Recorded for reference. The purchase price is not part of net income.</p>
+        </section>
+      )}
+
+      <IncomeDialog open={editing !== null} onClose={() => setEditing(null)} companyId={p.companyId} items={[p]} income={editing ?? undefined}
+        onSaved={() => { setEditing(null); toast('Income saved.'); onChanged(); reload(); }} />
+    </>
+  );
+}
+
+function CashFlowByYear({ flow, open, setOpen }: { flow: CashFlow; open: Set<number>; setOpen: (s: Set<number>) => void }) {
+  const toggle = (y: number) => { const n = new Set(open); if (n.has(y)) n.delete(y); else n.add(y); setOpen(n); };
+  const r = flow.reconciliation;
+  const neg = (c: number) => (c < 0 ? ' is-loss' : '');
+  const detail = (y: CashFlowYear) => (
+    <div className="year-detail">
+      {y.incomeByCategory.length === 0 && y.expensesByCategory.length === 0 ? <p className="muted">Nothing recorded this year.</p> : (
+        <>
+          {y.incomeByCategory.length > 0 && (
+            <table className="mini">
+              <caption className="sr-only">Income in {y.year} by type</caption>
+              <tbody>{y.incomeByCategory.map((c) => <tr key={c.category} className="mini__cat"><th scope="row">{c.category}</th><td className="money num">{formatCents(c.cents)}</td></tr>)}</tbody>
+            </table>
+          )}
+          {y.expensesByCategory.length > 0 && (
+            <table className="mini">
+              <caption className="sr-only">Expenses in {y.year} by category</caption>
+              <tbody>{y.expensesByCategory.map((c) => <tr key={c.name} className="mini__cat"><th scope="row">{c.name}</th><td className="money num">{formatCents(c.cents)}</td></tr>)}</tbody>
+            </table>
+          )}
+        </>
+      )}
+    </div>
+  );
+  return (
+    <section className="panel panel--flush" aria-label="By year">
+      <div className="byyear-head"><p className="muted">Income is counted by the date it was received and expenses by expense date. Net income is income minus expenses.</p></div>
+      <div className="table-wrap">
+        <table className="table table--years">
+          <caption className="sr-only">Income, expenses and net income for each calendar year</caption>
+          <thead><tr><th scope="col">Year</th><th scope="col" className="is-right">Income</th><th scope="col" className="is-right">Expenses</th><th scope="col" className="is-right">Net income</th></tr></thead>
+          <tbody>
+            {[...flow.byYear].reverse().map((y) => (
+              <Fragment key={y.year}>
+                <tr className={y.incomeCents === 0 && y.expensesCents === 0 ? 'is-quiet' : undefined}>
+                  <th scope="row" className="num">
+                    <button className="expander" aria-expanded={open.has(y.year)} aria-controls={`flow-year-${y.year}`} onClick={() => toggle(y.year)}>
+                      {open.has(y.year) ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                      {y.year}
+                    </button>
+                  </th>
+                  <td className="money num">{formatCents(y.incomeCents)}</td>
+                  <td className="money num">{formatCents(y.expensesCents)}</td>
+                  <td className={`money num${neg(y.netCents)}`}>{y.netCents < 0 ? '−' : ''}{formatCents(Math.abs(y.netCents))}</td>
+                </tr>
+                {open.has(y.year) && <tr className="year-row" id={`flow-year-${y.year}`}><td colSpan={4}>{detail(y)}</td></tr>}
+              </Fragment>
+            ))}
+          </tbody>
+          <tfoot><tr><th scope="row">All years</th><td className="money num">{formatCents(flow.incomeCents)}</td><td className="money num">{formatCents(flow.expensesCents)}</td><td className={`money num${neg(flow.netCents)}`}>{flow.netCents < 0 ? '−' : ''}{formatCents(Math.abs(flow.netCents))}</td></tr></tfoot>
+        </table>
+      </div>
+      <p className="pad" role="status">
+        {r.matches ? <>Reconciles: the yearly figures add up to the all-time income of {formatCents(r.lifetimeIncomeCents)} and expenses of {formatCents(r.lifetimeExpensesCents)}.</> : <strong>The yearly figures do not match the all-time totals. Please report this.</strong>}
+      </p>
+    </section>
   );
 }
 
@@ -98,7 +270,7 @@ function Summary({ fin, sold }: { fin: PropertyFinancials; sold: boolean }) {
         <div className="summary__item">
           <span className="summary__label">Profit and return</span>
           <span className="summary__value summary__value--plain">Not available</span>
-          <span className="muted">They appear once the property is sold. No market value is estimated.</span>
+          <span className="muted">They appear once it is sold. No market value is estimated.</span>
         </div>
       )}
     </section>
@@ -115,8 +287,8 @@ function Lifetime({ p, sold, days, readable, fin }: { p: Property; sold: boolean
       <section className="panel" aria-label="Purchase and sale">
         <h2 className="section-title">Purchase and sale</h2>
         <dl className="facts">
-          <Fact label="Purchased">{formatUsDate(p.purchaseDate)}</Fact>
-          <Fact label="Purchase price"><span className="money num">{formatCents(p.purchasePriceCents)}</span></Fact>
+          <Fact label="Purchased">{p.purchaseDate ? formatUsDate(p.purchaseDate) : UNAVAILABLE}</Fact>
+          <Fact label="Purchase price"><span className="money num">{formatCents(p.purchasePriceCents ?? 0)}</span></Fact>
           {sold ? (
             <>
               <Fact label="Sold">{formatUsDate(p.saleDate!)}</Fact>
@@ -135,7 +307,7 @@ function Lifetime({ p, sold, days, readable, fin }: { p: Property; sold: boolean
           <table className="bridge">
             <caption className="sr-only">From purchase price to profit</caption>
             <tbody>
-              <tr><th scope="row">Purchase price</th><Money cents={p.purchasePriceCents} /></tr>
+              <tr><th scope="row">Purchase price</th><Money cents={p.purchasePriceCents ?? 0} /></tr>
               <tr><th scope="row">{GROUP_LABELS.purchase_closing}</th><Money cents={g.purchase_closing} /></tr>
               <tr><th scope="row">{GROUP_LABELS.renovation}</th><Money cents={g.renovation} /></tr>
               <tr><th scope="row">{GROUP_LABELS.holding}</th><Money cents={g.holding} /></tr>
@@ -150,7 +322,7 @@ function Lifetime({ p, sold, days, readable, fin }: { p: Property; sold: boolean
             </tbody>
           </table>
         )}
-        <p className="muted">Voided expenses are not counted.{!sold && ' Profit and return apply only to sold properties.'}</p>
+        <p className="muted">Voided expenses are not counted.{!sold && ' Profit and return are worked out once it is sold.'}</p>
       </section>
     </div>
   );

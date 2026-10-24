@@ -384,7 +384,8 @@ describe('categories', () => {
   it('seeds the starter list with stable reporting groups for every new company', () => {
     const co = s.companies.create(company('Seed LLC')).id;
     const cats = s.categories.list(co);
-    expect(cats).toHaveLength(15);
+    expect(cats).toHaveLength(22); // the original 15 plus 7 added for cars and rentals
+    expect(cats.find((c) => c.name === 'Title & Registration')!.reportingGroup).toBe('purchase_closing');
     expect(cats.find((c) => c.name === 'Realtor Commissions')!.reportingGroup).toBe('selling_realtor');
     expect(cats.find((c) => c.name === 'Seller Closing Costs')!.reportingGroup).toBe('selling_closing');
     expect(cats.find((c) => c.name === 'Other Selling Costs')!.reportingGroup).toBe('selling_other');

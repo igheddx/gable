@@ -3,7 +3,7 @@
  * from that same data, so every total reconciles across all three. Money is integer cents,
  * dates are YYYY-MM-DD, percentages are basis points.
  */
-export type ReportKind = 'property' | 'sold-performance' | 'expense-activity' | 'portfolio-snapshot';
+export type ReportKind = 'property' | 'sold-performance' | 'expense-activity' | 'portfolio-snapshot' | 'income-expense';
 
 export type CellType = 'text' | 'money' | 'date' | 'int' | 'percent' | 'days' | 'year';
 export type Cell = string | number | null;
@@ -61,6 +61,13 @@ export interface OverviewData {
   realizedProfitCents: number;
   soldInPeriod: number;
   generalExpensesCents: number;
-  companies: { companyId: number; name: string; activeProperties: number; unsoldInvestmentCents: number; realizedProfitCents: number; generalExpensesCents: number }[];
+  /** Rentals and ongoing businesses: money in and out within the period, kept apart from the figures above. */
+  incomeAssets: number;
+  incomeCents: number;
+  incomeExpensesCents: number;
+  companies: {
+    companyId: number; name: string; activeProperties: number; unsoldInvestmentCents: number; realizedProfitCents: number; generalExpensesCents: number;
+    incomeAssets: number; incomeCents: number; incomeExpensesCents: number;
+  }[];
   recent: { expenseId: number; date: string; vendor: string; target: string; companyName: string; cents: number }[];
 }

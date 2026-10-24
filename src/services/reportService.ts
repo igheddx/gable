@@ -5,6 +5,9 @@ import { formatUsDate, isValidIsoDate, todayIso } from '../shared/dates';
 import { daysBetween } from '../shared/duration';
 import { roiBasisPoints } from '../shared/money';
 import type { Cell, Column, OverviewData, ReportDoc, ReportRequest, SummaryLine, Table } from '../shared/reportTypes';
+import { TEMPLATE_INFO } from '../shared/businessTypes';
+import type { Property } from '../shared/types';
+import { FinancialService } from './financialService';
 import type { PropertyService } from './propertyService';
 import type { CompanyService } from './companyService';
 
@@ -12,9 +15,14 @@ type Scope = number | 'all';
 
 interface PropRow {
   id: number; companyId: number; company: string; address: string; purchaseDate: string; saleDate: string | null; status: string;
-  purchaseCents: number; saleCents: number | null; archived: boolean;
+  purchaseCents: number; saleCents: number | null; archived: boolean; typeName: string;
 }
 interface PropMoney extends PropRow { groups: Record<ReportingGroup, number>; expensesCents: number; projectCostCents: number; profitCents: number | null; roiBp: number | null; days: number }
+
+/** Renovations and buy-and-sell items have a purchase, costs and a sale, so profit and return apply to them. */
+const PROFIT_TEMPLATES = "bt.template IN ('renovation', 'buy_sell')";
+/** Rentals and ongoing businesses are tracked by income against expenses instead. */
+const INCOME_TEMPLATES = "bt.template IN ('rental', 'income_expense')";
 
 const emptyGroups = (): Record<ReportingGroup, number> => Object.fromEntries(REPORTING_GROUPS.map((g) => [g, 0])) as Record<ReportingGroup, number>;
 
@@ -31,7 +39,11 @@ export class ReportService {
     private readonly properties: PropertyService,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly today: () => string = () => todayIso(),
-  ) {}
+  ) {
+    this.fin = new FinancialService(db, today);
+  }
+
+  private readonly fin: FinancialService;
 
   // ------------------------------------------------------------------ shared queries
 
@@ -43,17 +55,17 @@ export class ReportService {
     const rows = this.db
       .prepare(
         `SELECT p.id, p.company_id, c.display_name AS company, p.address1, p.address2, p.purchase_date, p.sale_date, p.status,
-                p.purchase_price_cents, p.sale_price_cents, p.is_archived
-         FROM property p JOIN company c ON c.id = p.company_id
+                p.purchase_price_cents, p.sale_price_cents, p.is_archived, bt.name AS type_name
+         FROM property p JOIN company c ON c.id = p.company_id JOIN business_type bt ON bt.id = p.business_type_id
          WHERE (? = 'all' OR p.company_id = ?) ${where ? 'AND ' + where : ''} ORDER BY c.display_name COLLATE NOCASE, p.address1 COLLATE NOCASE, p.id`,
       )
       .all(scope === 'all' ? 'all' : 'x', scope === 'all' ? 0 : scope, ...params) as {
-      id: number; company_id: number; company: string; address1: string; address2: string | null; purchase_date: string; sale_date: string | null;
-      status: string; purchase_price_cents: number; sale_price_cents: number | null; is_archived: number;
+      id: number; company_id: number; company: string; address1: string; address2: string | null; purchase_date: string | null; sale_date: string | null;
+      status: string; purchase_price_cents: number | null; sale_price_cents: number | null; is_archived: number; type_name: string;
     }[];
     return rows.map((r) => ({
       id: r.id, companyId: r.company_id, company: r.company, address: r.address2 ? `${r.address1}, ${r.address2}` : r.address1,
-      purchaseDate: r.purchase_date, saleDate: r.sale_date, status: r.status, purchaseCents: r.purchase_price_cents, saleCents: r.sale_price_cents, archived: r.is_archived === 1,
+      purchaseDate: r.purchase_date ?? '', saleDate: r.sale_date, status: r.status, purchaseCents: r.purchase_price_cents ?? 0, saleCents: r.sale_price_cents, archived: r.is_archived === 1, typeName: r.type_name,
     }));
   }
 
@@ -80,7 +92,7 @@ export class ReportService {
   }
 
   private soldRows(scope: Scope, from: string | null, to: string | null): PropMoney[] {
-    const where = ["p.status = 'Sold'", 'p.sale_date IS NOT NULL'];
+    const where = ["p.status = 'Sold'", 'p.sale_date IS NOT NULL', PROFIT_TEMPLATES];
     const params: string[] = [];
     if (from) { where.push('p.sale_date >= ?'); params.push(from); }
     if (to) { where.push('p.sale_date <= ?'); params.push(to); }
@@ -88,7 +100,7 @@ export class ReportService {
   }
 
   private unsoldRows(scope: Scope): PropMoney[] {
-    return this.withMoney(this.props(scope, "p.status <> 'Sold' AND p.is_archived = 0", []), this.today());
+    return this.withMoney(this.props(scope, `p.status <> 'Sold' AND p.is_archived = 0 AND ${PROFIT_TEMPLATES}`, []), this.today());
   }
 
   private expenseLines(scope: Scope, from: string | null, to: string | null, propertyIds?: number[]): { id: number; date: string; companyId: number; company: string; propertyId: number | null; property: string | null; vendor: string; cents: number; categories: string; attachments: number }[] {
@@ -141,6 +153,7 @@ export class ReportService {
     const unsold = this.unsoldRows(scope);
     const sold = this.soldRows(scope, from, to);
     const general = this.generalByCompany(scope, from, to);
+    const flow = this.incomeFlowByCompany(scope, from, to);
     const names = scope === 'all' ? this.companies.list(false).map((c) => ({ id: c.id, name: c.displayName })) : [{ id: scope, name: this.scopeName(scope) }];
     const recent = this.db
       .prepare(
@@ -156,15 +169,40 @@ export class ReportService {
       realizedProfitCents: sold.reduce((s, p) => s + (p.profitCents ?? 0), 0),
       soldInPeriod: sold.length,
       generalExpensesCents: [...general.values()].reduce((a, b) => a + b, 0),
+      incomeAssets: [...flow.values()].reduce((s, f) => s + f.assets, 0),
+      incomeCents: [...flow.values()].reduce((s, f) => s + f.income, 0),
+      incomeExpensesCents: [...flow.values()].reduce((s, f) => s + f.expenses, 0),
       companies: names.map((c) => ({
         companyId: c.id, name: c.name,
         activeProperties: unsold.filter((p) => p.companyId === c.id).length,
         unsoldInvestmentCents: unsold.filter((p) => p.companyId === c.id).reduce((s, p) => s + p.projectCostCents, 0),
         realizedProfitCents: sold.filter((p) => p.companyId === c.id).reduce((s, p) => s + (p.profitCents ?? 0), 0),
         generalExpensesCents: general.get(c.id) ?? 0,
+        incomeAssets: flow.get(c.id)?.assets ?? 0,
+        incomeCents: flow.get(c.id)?.income ?? 0,
+        incomeExpensesCents: flow.get(c.id)?.expenses ?? 0,
       })),
       recent: recent.map((r) => ({ expenseId: r.id, date: r.date, vendor: r.vendor, target: r.target, companyName: r.company, cents: r.cents })),
     };
+  }
+
+  /** Rentals and ongoing businesses by company: active items, income received and expenses paid within the period. */
+  private incomeFlowByCompany(scope: Scope, from: string, to: string): Map<number, { assets: number; income: number; expenses: number }> {
+    const out = new Map<number, { assets: number; income: number; expenses: number }>();
+    const slot = (id: number) => { let v = out.get(id); if (!v) { v = { assets: 0, income: 0, expenses: 0 }; out.set(id, v); } return v; };
+    const s = [scope === 'all' ? 'all' : 'x', scope === 'all' ? 0 : scope];
+    for (const r of this.db
+      .prepare(`SELECT p.company_id AS id, COUNT(*) AS n FROM property p JOIN business_type bt ON bt.id = p.business_type_id
+                WHERE p.is_archived = 0 AND p.status <> 'Sold' AND ${INCOME_TEMPLATES} AND (? = 'all' OR p.company_id = ?) GROUP BY p.company_id`)
+      .all(...s) as { id: number; n: number }[]) slot(r.id).assets = r.n;
+    for (const r of this.db
+      .prepare(`SELECT i.company_id AS id, SUM(i.amount_cents) AS v FROM income i WHERE i.status = 'posted' AND i.income_date >= ? AND i.income_date <= ? AND (? = 'all' OR i.company_id = ?) GROUP BY i.company_id`)
+      .all(from, to, ...s) as { id: number; v: number }[]) slot(r.id).income = r.v;
+    for (const r of this.db
+      .prepare(`SELECT e.company_id AS id, SUM(e.total_cents) AS v FROM expense e JOIN property p ON p.id = e.property_id JOIN business_type bt ON bt.id = p.business_type_id
+                WHERE e.status = 'posted' AND ${INCOME_TEMPLATES} AND e.expense_date >= ? AND e.expense_date <= ? AND (? = 'all' OR e.company_id = ?) GROUP BY e.company_id`)
+      .all(from, to, ...s) as { id: number; v: number }[]) slot(r.id).expenses = r.v;
+    return out;
   }
 
   private generalByCompany(scope: Scope, from: string | null, to: string | null): Map<number, number> {
@@ -186,6 +224,7 @@ export class ReportService {
     if (req.from && req.to) this.assertRange(req.from, req.to);
     switch (req.kind) {
       case 'property': return this.propertyReport(req.propertyId);
+      case 'income-expense': return this.incomeExpenseReport(req.scope, req.from, req.to);
       case 'sold-performance': return this.soldPerformance(req.scope, req.from, req.to);
       case 'expense-activity': return this.expenseActivity(req.scope, req.from, req.to);
       case 'portfolio-snapshot': return this.portfolioSnapshot(req.scope);
@@ -208,10 +247,127 @@ export class ReportService {
     return from || to ? `${from ? formatUsDate(from) : 'the beginning'} to ${to ? formatUsDate(to) : 'today'}` : 'All dates';
   }
 
+  /** Income entries (posted) for rentals and ongoing businesses, selected by INCOME date. */
+  private incomeLines(scope: Scope, from: string | null, to: string | null, propertyId?: number): { id: number; date: string; company: string; propertyId: number; property: string; type: string; category: string; notes: string; cents: number }[] {
+    const where = ["i.status = 'posted'", "(? = 'all' OR i.company_id = ?)"];
+    const params: (string | number)[] = [scope === 'all' ? 'all' : 'x', scope === 'all' ? 0 : scope];
+    if (from) { where.push('i.income_date >= ?'); params.push(from); }
+    if (to) { where.push('i.income_date <= ?'); params.push(to); }
+    if (propertyId !== undefined) { where.push('i.property_id = ?'); params.push(propertyId); }
+    return (this.db
+      .prepare(
+        `SELECT i.id, i.income_date AS date, co.display_name AS company, i.property_id, p.address1 AS property, bt.name AS type, i.category, i.notes, i.amount_cents AS cents
+         FROM income i JOIN company co ON co.id = i.company_id JOIN property p ON p.id = i.property_id JOIN business_type bt ON bt.id = p.business_type_id
+         WHERE ${where.join(' AND ')} ORDER BY i.income_date, i.id`,
+      )
+      .all(...params) as { id: number; date: string; company: string; property_id: number; property: string; type: string; category: string; notes: string | null; cents: number }[])
+      .map((r) => ({ id: r.id, date: r.date, company: r.company, propertyId: r.property_id, property: r.property, type: r.type, category: r.category, notes: r.notes ?? '', cents: r.cents }));
+  }
+
+  /** Rentals and ongoing businesses: income received against expenses paid in the period. Purchases and sales are not part of it. */
+  private incomeExpenseReport(scope: Scope, from: string | null, to: string | null): ReportDoc {
+    const all = scope === 'all';
+    const base = this.base('income-expense', 'Rental and other income', 'Income selected by INCOME date and expenses by EXPENSE date, for rentals and ongoing businesses only. Purchases and sales of these items, and renovation or vehicle costs, are not included.', scope, [['Date range', this.range(from, to)]]);
+    const items = this.props(scope, INCOME_TEMPLATES, []);
+    const ids = new Set(items.map((i) => i.id));
+    const income = this.incomeLines(scope, from, to).filter((i) => ids.has(i.propertyId));
+    const exp = this.expenseLines(scope, from, to, [...ids]);
+    const alloc = this.allocationLines(scope, from, to, [...ids]);
+    const sum = (xs: { cents: number }[]) => xs.reduce((s, x) => s + x.cents, 0);
+    const incomeTotal = sum(income);
+    const expTotal = sum(exp);
+
+    const byAsset = items
+      .map((it) => {
+        const inc = sum(income.filter((i) => i.propertyId === it.id));
+        const ex = sum(exp.filter((e) => e.propertyId === it.id));
+        return { it, inc, ex };
+      })
+      .filter((r) => !r.it.archived || r.inc !== 0 || r.ex !== 0);
+    const assetCols: Column[] = [
+      ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []),
+      { key: 'asset', label: 'Item', type: 'text', width: 30 }, { key: 'type', label: 'Type', type: 'text', width: 16 },
+      money('income', 'Income'), money('expenses', 'Expenses'), money('net', 'Net income'),
+    ];
+    const incomeByCat = new Map<string, number>();
+    for (const i of income) incomeByCat.set(i.category, (incomeByCat.get(i.category) ?? 0) + i.cents);
+    const expByCat = new Map<string, number>();
+    for (const a of alloc) expByCat.set(a.category, (expByCat.get(a.category) ?? 0) + a.cents);
+    const months = new Map<string, { inc: number; ex: number }>();
+    for (const i of income) { const m = i.date.slice(0, 7); const v = months.get(m) ?? { inc: 0, ex: 0 }; v.inc += i.cents; months.set(m, v); }
+    for (const e of exp) { const m = e.date.slice(0, 7); const v = months.get(m) ?? { inc: 0, ex: 0 }; v.ex += e.cents; months.set(m, v); }
+    const catRows = (m: Map<string, number>): Cell[][] => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, v]) => [k, v]);
+    return {
+      ...base,
+      summary: [
+        { label: 'Items with activity', value: byAsset.filter((r) => r.inc !== 0 || r.ex !== 0).length, type: 'int' },
+        { label: 'Income received', value: incomeTotal, type: 'money' },
+        { label: 'Expenses paid', value: expTotal, type: 'money' },
+        { label: 'Net income (income minus expenses)', value: incomeTotal - expTotal, type: 'money', emphasis: true },
+      ],
+      tables: [
+        { id: 'by-item', title: 'By item', sheet: 'By Item', columns: assetCols,
+          rows: byAsset.map((r): Cell[] => [...(all ? [r.it.company] : []), r.it.address, r.it.typeName, r.inc, r.ex, r.inc - r.ex]),
+          totals: byAsset.length ? ['Total', ...(all ? [null] : []), null, incomeTotal, expTotal, incomeTotal - expTotal] : undefined, empty: 'No rentals or ongoing businesses yet.' },
+        { id: 'by-month', title: 'By month', sheet: 'By Month',
+          columns: [{ key: 'month', label: 'Month', type: 'text', width: 12 }, money('income', 'Income'), money('expenses', 'Expenses'), money('net', 'Net income')],
+          rows: [...months.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([m, v]): Cell[] => [m, v.inc, v.ex, v.inc - v.ex]),
+          totals: months.size ? ['Total', incomeTotal, expTotal, incomeTotal - expTotal] : undefined, empty: 'No activity in this period.' },
+        { id: 'income-by-category', title: 'Income by type', sheet: 'Income By Type', columns: [{ key: 'category', label: 'Type of income', type: 'text', width: 28 }, money('amount', 'Amount')],
+          rows: catRows(incomeByCat), totals: incomeByCat.size ? ['Total', incomeTotal] : undefined, empty: 'No income in this period.' },
+        { id: 'expenses-by-category', title: 'Expenses by category', sheet: 'Expenses By Category', columns: [{ key: 'category', label: 'Category', type: 'text', width: 28 }, money('amount', 'Amount')],
+          rows: catRows(expByCat), totals: expByCat.size ? ['Total', sum(alloc)] : undefined, empty: 'No expenses in this period.' },
+        { id: 'income', title: 'Income entries', sheet: 'Income',
+          columns: [{ key: 'date', label: 'Date', type: 'date', width: 12 }, ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []), { key: 'asset', label: 'Item', type: 'text', width: 28 }, { key: 'category', label: 'Type of income', type: 'text', width: 20 }, { key: 'notes', label: 'Notes', type: 'text', width: 30 }, money('amount', 'Amount')],
+          rows: income.map((i): Cell[] => [i.date, ...(all ? [i.company] : []), i.property, i.category, i.notes, i.cents]),
+          totals: income.length ? ['Total', ...(all ? [null] : []), null, null, null, incomeTotal] : undefined, empty: 'No income entries in this period.' },
+        { id: 'expenses', title: 'Expenses', sheet: 'Expenses',
+          columns: [{ key: 'date', label: 'Date', type: 'date', width: 12 }, ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []), { key: 'asset', label: 'Item', type: 'text', width: 28 }, { key: 'vendor', label: 'Vendor', type: 'text', width: 26 }, { key: 'cat', label: 'Categories', type: 'text', width: 28 }, money('amount', 'Amount')],
+          rows: exp.map((e): Cell[] => [e.date, ...(all ? [e.company] : []), e.property ?? '', e.vendor, e.categories, e.cents]),
+          totals: exp.length ? ['Total', ...(all ? [null] : []), null, null, null, expTotal] : undefined, empty: 'No expenses in this period.' },
+      ],
+      notes: ['Voided income and expenses are excluded.', 'This is a management report, not a financial statement, tax return or cash-flow statement. Mortgage principal, depreciation and taxes are not included.'],
+    };
+  }
+
+  /** One rental or ongoing business, lifetime, by year. */
+  private cashFlowReport(prop: Property): ReportDoc {
+    const flow = this.fin.cashFlow(prop.id);
+    const base = this.base('property', `Item report: ${prop.address1}`, 'Income received and expenses paid for one item, by year. Income is counted by income date and expenses by expense date; voided entries are excluded.', prop.companyId, [['Item', prop.city ? `${prop.address1}, ${prop.city}, ${prop.state} ${prop.zip}` : prop.address1], ['Type', prop.businessTypeName]]);
+    const income = this.incomeLines(prop.companyId, null, null, prop.id);
+    const exp = this.expenseLines(prop.companyId, null, null, [prop.id]);
+    const alloc = this.allocationLines(prop.companyId, null, null, [prop.id]);
+    const yearRows = flow.byYear.map((y): Cell[] => [y.year, y.incomeCents, y.expensesCents, y.netCents]);
+    return {
+      ...base,
+      summary: [
+        ...(prop.purchaseDate ? [{ label: 'Purchase date', value: prop.purchaseDate, type: 'date' as const }] : []),
+        ...(prop.purchasePriceCents !== null ? [{ label: 'Purchase price (not part of net income)', value: prop.purchasePriceCents, type: 'money' as const }] : []),
+        { label: 'Income received', value: flow.incomeCents, type: 'money' },
+        { label: 'Expenses paid', value: flow.expensesCents, type: 'money' },
+        { label: 'Net income (income minus expenses)', value: flow.netCents, type: 'money', emphasis: true },
+      ],
+      tables: [
+        { id: 'by-year', title: 'By year', sheet: 'By Year',
+          columns: [{ key: 'year', label: 'Year', type: 'year', width: 8 }, money('income', 'Income'), money('expenses', 'Expenses'), money('net', 'Net income')],
+          rows: yearRows, totals: ['All years', flow.incomeCents, flow.expensesCents, flow.netCents], empty: 'No activity.' },
+        { id: 'income', title: 'Income entries', sheet: 'Income',
+          columns: [{ key: 'date', label: 'Date', type: 'date', width: 12 }, { key: 'category', label: 'Type of income', type: 'text', width: 22 }, { key: 'notes', label: 'Notes', type: 'text', width: 34 }, money('amount', 'Amount')],
+          rows: income.map((i): Cell[] => [i.date, i.category, i.notes, i.cents]), totals: income.length ? ['Total', null, null, flow.incomeCents] : undefined, empty: 'No income recorded.' },
+        { id: 'expenses', title: 'Expenses', sheet: 'Expenses',
+          columns: [{ key: 'date', label: 'Date', type: 'date', width: 12 }, { key: 'vendor', label: 'Vendor', type: 'text', width: 28 }, { key: 'cat', label: 'Categories', type: 'text', width: 30 }, { key: 'rec', label: 'Receipts', type: 'int', width: 9 }, money('amount', 'Amount')],
+          rows: exp.map((e): Cell[] => [e.date, e.vendor, e.categories, e.attachments, e.cents]), totals: exp.length ? ['Total', null, null, null, flow.expensesCents] : undefined, empty: 'No expenses recorded.' },
+        this.allocationTable(alloc, false, false),
+      ],
+      notes: ['The purchase price, if recorded, is shown for reference and is not part of net income.', 'This is a management report, not a financial statement or tax return.'],
+    };
+  }
+
   /** Individual property profitability. Same structure as the property screen. */
   private propertyReport(propertyId: number | null): ReportDoc {
     if (propertyId === null) throw new AppError('VALIDATION', 'Choose a property.');
     const prop = this.properties.get(propertyId);
+    if (TEMPLATE_INFO[prop.template].tracksIncome) return this.cashFlowReport(prop);
     const [m] = this.withMoney(this.props(prop.companyId, 'p.id = ?', [propertyId]), this.today());
     if (!m) throw new AppError('NOT_FOUND', 'That property no longer exists.');
     const sold = m.profitCents !== null;
@@ -317,9 +473,12 @@ export class ReportService {
     };
     for (const p of sold) for (const k of REPORTING_GROUPS) tot.groups[k] += p.groups[k];
     const sellingOf = (g: Record<ReportingGroup, number>) => SELLING_GROUPS.reduce((s, k) => s + g[k], 0);
+    // A Type column appears only when something other than a renovation is in the report.
+    const showType = sold.some((p) => p.typeName !== 'Renovation');
     const columns: Column[] = [
       ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []),
       { key: 'address', label: 'Property', type: 'text', width: 28 },
+      ...(showType ? [{ key: 'type', label: 'Type', type: 'text' as const, width: 14 }] : []),
       { key: 'purchased', label: 'Purchased', type: 'date', width: 12 },
       { key: 'sold', label: 'Sold', type: 'date', width: 12 },
       { key: 'days', label: 'Days held', type: 'days', width: 10 },
@@ -328,10 +487,10 @@ export class ReportService {
       money('profit', 'Profit before taxes'), { key: 'roi', label: 'Return on cost', type: 'percent', width: 12 },
     ];
     const rows = sold.map((p): Cell[] => [
-      ...(all ? [p.company] : []), p.address, p.purchaseDate, p.saleDate, p.days, p.purchaseCents, p.groups.purchase_closing, p.groups.renovation, p.groups.holding,
+      ...(all ? [p.company] : []), p.address, ...(showType ? [p.typeName] : []), p.purchaseDate, p.saleDate, p.days, p.purchaseCents, p.groups.purchase_closing, p.groups.renovation, p.groups.holding,
       sellingOf(p.groups), p.groups.other, p.projectCostCents, p.saleCents, p.profitCents, p.roiBp,
     ]);
-    const totals: Cell[] = [...(all ? ['Total'] : []), all ? null : 'Total', null, null, null, tot.purchase, tot.groups.purchase_closing, tot.groups.renovation, tot.groups.holding, sellingOf(tot.groups), tot.groups.other, tot.cost, tot.sale, tot.profit, roiBasisPoints(tot.profit, tot.cost)];
+    const totals: Cell[] = [...(all ? ['Total'] : []), all ? null : 'Total', ...(showType ? [null] : []), null, null, null, tot.purchase, tot.groups.purchase_closing, tot.groups.renovation, tot.groups.holding, sellingOf(tot.groups), tot.groups.other, tot.cost, tot.sale, tot.profit, roiBasisPoints(tot.profit, tot.cost)];
     if (all) totals[1] = null;
     const expCols: Column[] = [
       ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []),
@@ -426,15 +585,17 @@ export class ReportService {
     const unsold = this.unsoldRows(scope);
     const sold = this.soldRows(scope, null, null);
     const base = this.base('portfolio-snapshot', 'Current portfolio snapshot', 'Unsold properties show cost recorded to date. Sold properties show realized results. The two are never added together.', scope, []);
+    const showType = [...unsold, ...sold].some((p) => p.typeName !== 'Renovation');
+    const typeCol: Column[] = showType ? [{ key: 'type', label: 'Type', type: 'text', width: 14 }] : [];
     const uCols: Column[] = [
       ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []),
-      { key: 'address', label: 'Property', type: 'text', width: 28 }, { key: 'status', label: 'Status', type: 'text', width: 12 }, { key: 'purchased', label: 'Purchased', type: 'date', width: 12 },
+      { key: 'address', label: 'Property', type: 'text', width: 28 }, ...typeCol, { key: 'status', label: 'Status', type: 'text', width: 12 }, { key: 'purchased', label: 'Purchased', type: 'date', width: 12 },
       { key: 'days', label: 'Held to date (days)', type: 'days', width: 12 }, money('purchase', 'Purchase price'), money('exp', 'Expenses to date'), money('inv', 'Recorded investment'),
     ];
     const uTotals: Cell[] = uCols.map((c, i) => (i === 0 ? 'Total' : c.key === 'purchase' ? unsold.reduce((s, p) => s + p.purchaseCents, 0) : c.key === 'exp' ? unsold.reduce((s, p) => s + p.expensesCents, 0) : c.key === 'inv' ? unsold.reduce((s, p) => s + p.projectCostCents, 0) : null));
     const sCols: Column[] = [
       ...(all ? [{ key: 'company', label: 'Company', type: 'text' as const, width: 22 }] : []),
-      { key: 'address', label: 'Property', type: 'text', width: 28 }, { key: 'sold', label: 'Sold', type: 'date', width: 12 }, { key: 'days', label: 'Days held', type: 'days', width: 10 },
+      { key: 'address', label: 'Property', type: 'text', width: 28 }, ...typeCol, { key: 'sold', label: 'Sold', type: 'date', width: 12 }, { key: 'days', label: 'Days held', type: 'days', width: 10 },
       money('cost', 'Total project cost'), money('sale', 'Gross sale price'), money('profit', 'Profit before taxes'), { key: 'roi', label: 'Return on cost', type: 'percent', width: 12 },
     ];
     const sCost = sold.reduce((s, p) => s + p.projectCostCents, 0);
@@ -450,9 +611,9 @@ export class ReportService {
       ],
       tables: [
         { id: 'unsold', title: 'Unsold properties: investment recorded to date', sheet: 'Unsold', columns: uCols,
-          rows: unsold.map((p): Cell[] => [...(all ? [p.company] : []), p.address, p.status, p.purchaseDate, p.days, p.purchaseCents, p.expensesCents, p.projectCostCents]), totals: unsold.length ? uTotals : undefined, empty: 'No unsold properties.' },
+          rows: unsold.map((p): Cell[] => [...(all ? [p.company] : []), p.address, ...(showType ? [p.typeName] : []), p.status, p.purchaseDate, p.days, p.purchaseCents, p.expensesCents, p.projectCostCents]), totals: unsold.length ? uTotals : undefined, empty: 'No unsold properties.' },
         { id: 'sold', title: 'Sold properties: realized results', sheet: 'Sold', columns: sCols,
-          rows: sold.map((p): Cell[] => [...(all ? [p.company] : []), p.address, p.saleDate, p.days, p.projectCostCents, p.saleCents, p.profitCents, p.roiBp]), totals: sold.length ? sTotals : undefined, empty: 'No sold properties.' },
+          rows: sold.map((p): Cell[] => [...(all ? [p.company] : []), p.address, ...(showType ? [p.typeName] : []), p.saleDate, p.days, p.projectCostCents, p.saleCents, p.profitCents, p.roiBp]), totals: sold.length ? sTotals : undefined, empty: 'No sold properties.' },
       ],
       notes: [
         'Recorded investment is cost recorded so far. It is not a market value, and no value is estimated.',

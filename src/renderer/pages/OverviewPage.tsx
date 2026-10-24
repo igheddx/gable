@@ -53,12 +53,21 @@ export function OverviewPage() {
         {data && (
           <>
             <section className="summary summary--4" aria-label="Key figures">
-              <Figure label="Active properties" value={String(data.activeProperties)} note="Not yet sold, not archived" />
-              <Figure label="Investment in unsold properties" value={formatCents(data.unsoldInvestmentCents)} note="Cost recorded so far. Not a market value." />
-              <Figure label="Realized profit on properties sold" value={`${data.realizedProfitCents < 0 ? '−' : ''}${formatCents(Math.abs(data.realizedProfitCents))}`} loss={data.realizedProfitCents < 0}
+              <Figure label="Active assets" value={String(data.activeProperties)} note="Renovations and vehicles not yet sold" />
+              <Figure label="Investment in unsold assets" value={formatCents(data.unsoldInvestmentCents)} note="Cost recorded so far. Not a market value." />
+              <Figure label="Realized profit on assets sold" value={`${data.realizedProfitCents < 0 ? '−' : ''}${formatCents(Math.abs(data.realizedProfitCents))}`} loss={data.realizedProfitCents < 0}
                 note={`${data.soldInPeriod} sold · ${data.periodLabel} · before taxes`} />
-              <Figure label="General company expenses" value={formatCents(data.generalExpensesCents)} note={`${data.periodLabel} · separate from any property`} />
+              <Figure label="General company expenses" value={formatCents(data.generalExpensesCents)} note={`${data.periodLabel} · separate from any asset`} />
             </section>
+
+            {(data.incomeAssets > 0 || data.incomeCents !== 0 || data.incomeExpensesCents !== 0) && (
+              <section className="summary summary--3" aria-label="Rentals and other income">
+                <Figure label="Income from rentals and other businesses" value={formatCents(data.incomeCents)} note={`${data.periodLabel} · ${data.incomeAssets} active ${data.incomeAssets === 1 ? 'rental or business' : 'rentals and businesses'}`} />
+                <Figure label="Their expenses" value={formatCents(data.incomeExpensesCents)} note={`${data.periodLabel} · expenses recorded against them`} />
+                <Figure label="Net income" value={`${data.incomeCents - data.incomeExpensesCents < 0 ? '−' : ''}${formatCents(Math.abs(data.incomeCents - data.incomeExpensesCents))}`} loss={data.incomeCents - data.incomeExpensesCents < 0}
+                  note="Income minus expenses, before taxes. Kept apart from sold-asset profit." />
+              </section>
+            )}
 
             {scope === 'all' && (
               <section className="panel panel--flush" aria-label="By company">
@@ -66,7 +75,7 @@ export function OverviewPage() {
                 <div className="table-wrap">
                   <table className="table">
                     <caption className="sr-only">Figures for each company</caption>
-                    <thead><tr><th scope="col">Company</th><th scope="col" className="is-right">Active properties</th><th scope="col" className="is-right">Unsold investment</th><th scope="col" className="is-right">Realized profit</th><th scope="col" className="is-right">General expenses</th></tr></thead>
+                    <thead><tr><th scope="col">Company</th><th scope="col" className="is-right">Active assets</th><th scope="col" className="is-right">Unsold investment</th><th scope="col" className="is-right">Realized profit</th><th scope="col" className="is-right">General expenses</th></tr></thead>
                     <tbody>
                       {data.companies.map((c) => (
                         <tr key={c.companyId}>
@@ -87,7 +96,7 @@ export function OverviewPage() {
                 <div className="table-wrap">
                   <table className="table">
                     <caption className="sr-only">Most recently recorded expenses</caption>
-                    <thead><tr><th scope="col">Date</th><th scope="col">Vendor</th><th scope="col">Property</th>{scope === 'all' && <th scope="col">Company</th>}<th scope="col" className="is-right">Amount</th></tr></thead>
+                    <thead><tr><th scope="col">Date</th><th scope="col">Vendor</th><th scope="col">Asset</th>{scope === 'all' && <th scope="col">Company</th>}<th scope="col" className="is-right">Amount</th></tr></thead>
                     <tbody>
                       {data.recent.map((r) => (
                         <tr key={r.expenseId}>
@@ -103,7 +112,7 @@ export function OverviewPage() {
                 </div>
               )}
             </section>
-            <p className="muted small">Sold-property profit is selected by sale date and includes each property&apos;s full lifetime costs. General company expenses are selected by expense date. They are different bases and are shown separately on purpose.</p>
+            <p className="muted small">Sold-asset profit is selected by sale date and includes each asset&apos;s full lifetime costs. Rental and business income is selected by the date it was received. General company expenses are selected by expense date. They are different bases and are shown separately on purpose.</p>
           </>
         )}
       </div>

@@ -153,7 +153,7 @@ describe('search and filters', () => {
     expect(page1.total).toBe(5);
     expect(page1.rows).toHaveLength(2);
     expect(page3.rows).toHaveLength(1);
-    expect(page1.rows[0]!.purchaseDate <= page1.rows[1]!.purchaseDate).toBe(true);
+    expect(page1.rows[0]!.purchaseDate! <= page1.rows[1]!.purchaseDate!).toBe(true);
     expect(addrs(s.properties.list({ scope: 'all', sort: 'address' }))[0]).toBe('125 Oak Drive');
   });
 

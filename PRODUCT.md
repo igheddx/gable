@@ -33,6 +33,16 @@ Address fields, purchase date and price, status (**Held, Renovating, Listed, Sol
 - Clearing/reopening a sale is a deliberate, confirmed action.
 - A property belongs to one company; company cannot change once financial records exist (v1).
 
+### F3a. Business types: renovations, rentals, vehicles and others (added after the original guide)
+David also buys and sells cars and owns rental properties, so "properties" became **assets**, each with a **business type**:
+- **Renovation** (built in): the original buy, renovate and sell property, with cost, profit and return.
+- **Rental** (built in): an address-based property that takes **income** (rent, late fees, parking and pet fees, deposits kept, other) as well as expenses. It shows **net income = income minus expenses** by year; no profit/ROI. The purchase date and price are optional.
+- **Vehicle** (built in): a name (for example "2018 Honda Accord") and an optional ID/VIN instead of an address; purchase, expenses, sale, profit and return exactly like a renovation.
+- **Custom types** (Settings → Business types): a name plus one of two templates, *Buy and sell items* (works like Vehicle) or *Ongoing income and expenses* (name only; income and expenses, no purchase or sale). Custom types can be renamed, archived and restored; the built-in three cannot.
+- What kind of asset it is cannot change after it is created (an address and a name are different shapes of data).
+- Rental and ongoing-business money is **kept apart** from sold-asset profit on the Overview and in reports; the two are never added together. Rentals and ongoing businesses are not part of "unsold investment" or the sold-asset report. Voided income and expenses are excluded everywhere, and income is voided, never deleted.
+- Out of scope still: tenants, leases, rent due/late reminders, depreciation, mortgage principal, tax treatment.
+
 ### F4. Search and filters
 Partial match on address, city, ZIP; vendor and notes in their lists. Filters: company, status, purchase/sale date ranges, expense date/category/property. Paginated or virtualized; parameterized queries. Distinguish "no records" from "no matches".
 
@@ -107,7 +117,7 @@ Context isolation on, sandbox on, no Node in renderer, restrictive CSP, typed an
 
 ## 7. Exclusions (v1)
 
-Bank integration, hosted service, mobile app, listing lookup, tax advice, formal accounting, rental management, payroll, multi-currency, cloud sync, auto-updater, LLM/remote OCR. Receipt "upload" means local file import. Supported receipt formats: JPG, PNG, PDF. Unsupported formats (e.g., HEIC) get clear guidance.
+Bank integration, hosted service, mobile app, listing lookup, tax advice, formal accounting, rental management (tenants, leases, reminders; basic rental income and expense tracking is included, see F3a), payroll, multi-currency, cloud sync, auto-updater, LLM/remote OCR. Receipt "upload" means local file import. Supported receipt formats: JPG, PNG, PDF. Unsupported formats (e.g., HEIC) get clear guidance.
 
 ## 8. Reference fixtures (acceptance numbers)
 

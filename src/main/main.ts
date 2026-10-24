@@ -6,7 +6,9 @@ import { openDatabase, type Db } from '../db/connection';
 import { AppService } from '../services/appService';
 import { CompanyService } from '../services/companyService';
 import { PropertyService } from '../services/propertyService';
+import { BusinessTypeService } from '../services/businessTypeService';
 import { CategoryService } from '../services/categoryService';
+import { IncomeService } from '../services/incomeService';
 import { ExpenseService } from '../services/expenseService';
 import { FinancialService } from '../services/financialService';
 import { ReceiptFiles } from '../services/receiptFiles';
@@ -246,6 +248,8 @@ if (!app.requestSingleInstanceLock()) {
         app: new AppService({ db, name: app.getName(), version: app.getVersion(), platform: process.platform }),
         companies,
         properties,
+        businessTypes: new BusinessTypeService(db),
+        income: new IncomeService(db, companies),
         categories: new CategoryService(db, companies),
         expenses,
         financials: new FinancialService(db),

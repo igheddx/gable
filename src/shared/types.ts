@@ -1,4 +1,5 @@
 import type { PropertyStatus } from './schemas';
+import type { Template } from './businessTypes';
 
 export interface Company {
   id: number;
@@ -17,19 +18,60 @@ export interface Property {
   companyId: number;
   companyName: string;
   companyArchived: boolean;
+  businessTypeId: number;
+  businessTypeName: string;
+  template: Template;
+  /** The street address for address-based items, or the item's name (for example "2018 Honda Accord"). */
   address1: string;
   address2: string;
   city: string;
   state: string;
   zip: string;
-  purchaseDate: string;
-  purchasePriceCents: number;
+  /** An ID or serial number, such as a VIN. */
+  identifier: string;
+  purchaseDate: string | null;
+  purchasePriceCents: number | null;
   status: PropertyStatus;
   saleDate: string | null;
   salePriceCents: number | null;
   description: string;
   notes: string;
   isArchived: boolean;
+}
+
+export interface Income {
+  id: number;
+  companyId: number;
+  companyName: string;
+  propertyId: number;
+  propertyName: string;
+  incomeDate: string;
+  amountCents: number;
+  category: string;
+  notes: string;
+  status: 'posted' | 'voided';
+  createdAt: string;
+}
+
+export interface IncomePage { rows: Income[]; total: number; page: number; pageSize: number }
+
+export interface CashFlowYear {
+  year: number;
+  incomeCents: number;
+  expensesCents: number;
+  netCents: number;
+  incomeByCategory: { category: string; cents: number }[];
+  expensesByCategory: { name: string; cents: number }[];
+}
+
+/** Money in and out of a rental or an ongoing business. Voided entries are excluded. */
+export interface CashFlow {
+  propertyId: number;
+  incomeCents: number;
+  expensesCents: number;
+  netCents: number;
+  byYear: CashFlowYear[];
+  reconciliation: { lifetimeIncomeCents: number; yearsIncomeCents: number; lifetimeExpensesCents: number; yearsExpensesCents: number; matches: boolean };
 }
 
 export interface PropertyPage {

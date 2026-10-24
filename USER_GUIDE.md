@@ -12,9 +12,19 @@ Gable keeps track of your properties, what you spend on them, and what you make 
 - The box at the top left switches company. **All Companies** shows everything together but is view-only: pick one company to add anything.
 - Settings → Companies lets you add companies, choose the **default** (the one Gable opens to) and archive a company. Archiving hides it and keeps all its records; you can restore it.
 
-## Adding a property
+## Adding an asset
 
-Properties → **Add property**. Status is Held, Renovating, Listed or Sold. Marking a property Sold asks for the sale date and the **gross** sale price. Enter commissions and closing costs as expenses, not here, so they are never counted twice.
+**Assets** → **Add asset**, then choose what you are adding:
+- **Renovation**: a house you buy, fix up and sell. Address, purchase date and price. Status is Held, Renovating, Listed or Sold. Marking it Sold asks for the sale date and the **gross** sale price. Enter commissions and closing costs as expenses, not here, so they are never counted twice.
+- **Rental**: a property you rent out. Address; the purchase date and price are optional. You record **income** (rent and so on) and expenses, and Gable shows **net income**.
+- **Vehicle**: a car or anything you buy, prepare and sell. A name (such as "2018 Honda Accord") and an optional VIN or ID instead of an address. It works like a renovation: purchase, expenses, sale, profit and return.
+- Anything else you add yourself under **Settings → Business types** (for example Boats or Equipment, or an ongoing business like a car wash).
+
+Type dates as digits only (for example `01152026`); Gable adds the slashes. What kind of asset it is cannot be changed afterwards.
+
+## Income (rentals and ongoing businesses)
+
+**Income** in the sidebar, or **Add income** on a rental's page. Choose the rental or business, the date received, the amount and the type (Rent, Late fees and so on). A mistake is **voided**, never deleted, and stops counting; you can restore it. Expenses for a rental are entered the normal way (Expenses, or **Add expense** on its page). Rental money is shown separately from the profit on things you sold; Gable never adds the two together.
 
 ## Entering an expense
 
@@ -36,14 +46,16 @@ Expenses → **Review receipts** → **Add receipts**. Choose photos or PDFs (JP
 - A receipt that looks like one you already saved shows a warning. If it really is a different purchase, tick the box to save it.
 - A receipt that cannot be read can always be entered by hand.
 
-## What each property shows
+## What each asset shows
 
-On a property's page: purchase and sale facts, **days held** (or *Held to date* if unsold), the **lifetime cost** from purchase price to profit, and a **By year** view. Profit and return appear only for sold properties. An unsold property shows the investment recorded so far. That is cost, not value; Gable never estimates a market value.
+On a renovation's or vehicle's page: purchase and sale facts, **days held** (or *Held to date* if unsold), the **lifetime cost** from purchase price to profit, and a **By year** view. Profit and return appear only once sold. An unsold one shows the investment recorded so far. That is cost, not value; Gable never estimates a market value.
+
+On a rental's (or business's) page: **income received**, **expenses paid** and **net income**, by year, plus every income entry. There is no profit or return figure for these.
 
 ## Reports and the Overview
 
-- **Overview**: active properties, investment in unsold properties, profit on properties sold in a period, and general company expenses. They are shown separately because they cover different things.
-- **Reports**: sold-property performance (by sale date), expense activity (by expense date), current portfolio, and a single-property report. Export to **Excel** or **PDF**.
+- **Overview**: active assets, investment in unsold assets, profit on assets sold in a period, general company expenses, and (if you have rentals or businesses) their income, expenses and net income. They are shown separately because they cover different things.
+- **Reports**: sold-asset performance (by sale date; renovations and vehicles), rental and other income (by income and expense date), expense activity (by expense date), current portfolio, and a single-asset report. Export to **Excel** or **PDF**.
 - These are management reports, not tax returns or financial statements.
 
 ## Backups

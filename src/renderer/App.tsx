@@ -10,6 +10,8 @@ import { PropertyDetailPage } from './pages/PropertyDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { BackupsPage } from './pages/BackupsPage';
+import { BusinessTypesPage } from './pages/BusinessTypesPage';
+import { IncomePage } from './pages/IncomePage';
 import { CompanyEditPage } from './pages/CompanyEditPage';
 import { SetupPage } from './pages/SetupPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -31,6 +33,8 @@ function Routes() {
       return <PropertyDetailPage key={route.query.toString()} />;
     case '/expenses':
       return <ExpensesPage />;
+    case '/income':
+      return <IncomePage />;
     case '/expenses/new':
     case '/expenses/edit':
       return <ExpenseEntryPage key={route.path + route.query.toString()} />;
@@ -44,6 +48,8 @@ function Routes() {
       return <BackupsPage />;
     case '/settings/categories':
       return <CategoriesPage />;
+    case '/settings/business-types':
+      return <BusinessTypesPage />;
     case '/settings/company':
       return <CompanyEditPage key={route.query.toString()} />;
     case '/showcase':

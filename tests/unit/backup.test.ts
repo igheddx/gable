@@ -287,7 +287,7 @@ describe('older backups upgrade after restore', () => {
     expect((b.db.prepare('SELECT MAX(version) AS v FROM schema_migration').get() as { v: number }).v).toBe(LATEST_SCHEMA);
     const companies = new CompanyService(b.db, path.join(b.dir, 'logos'));
     expect(companies.list().map((c) => c.displayName)).toEqual(['Legacy LLC']);
-    expect(new CategoryService(b.db, companies).list(1)).toHaveLength(15); // seeded by the upgrade
+    expect(new CategoryService(b.db, companies).list(1)).toHaveLength(22); // seeded by the upgrade (15 original, 7 added with business types)
     expect(new PropertyService(b.db, companies).get(1)).toMatchObject({ address1: '1 Legacy Way', purchasePriceCents: 5_000_000 });
     const keep = fs.readdirSync(path.join(b.dir, 'backups', 'pre-upgrade'));
     expect(keep).toHaveLength(1);

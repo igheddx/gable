@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDatabase, type Db } from '../../src/db/connection';
+import { BusinessTypeService } from '../../src/services/businessTypeService';
 import { CategoryService } from '../../src/services/categoryService';
+import { IncomeService } from '../../src/services/incomeService';
 import { CompanyService } from '../../src/services/companyService';
 import { ExpenseService } from '../../src/services/expenseService';
 import { FinancialService } from '../../src/services/financialService';
@@ -10,13 +12,15 @@ import { PropertyService } from '../../src/services/propertyService';
 import { ReceiptFiles } from '../../src/services/receiptFiles';
 import { ReceiptService } from '../../src/services/receiptService';
 import { FakeOcr } from './fakeOcr';
-import type { ExpenseInput, PropertyFields } from '../../src/shared/schemas';
+import type { ExpenseInput, IncomeInput, PropertyFields } from '../../src/shared/schemas';
 
 export interface Stack {
   dir: string;
   db: Db;
   companies: CompanyService;
   properties: PropertyService;
+  businessTypes: BusinessTypeService;
+  income: IncomeService;
   categories: CategoryService;
   expenses: ExpenseService;
   financials: FinancialService;
@@ -37,6 +41,8 @@ export function makeStack(): Stack {
   const db = openDatabase(path.join(dir, 'gable.db'));
   const companies = new CompanyService(db, path.join(dir, 'logos'));
   const properties = new PropertyService(db, companies);
+  const businessTypes = new BusinessTypeService(db);
+  const income = new IncomeService(db, companies);
   const categories = new CategoryService(db, companies);
   const receiptsDir = path.join(dir, 'receipts');
   const files = new ReceiptFiles(receiptsDir, path.join(dir, 'staging'));
@@ -45,7 +51,7 @@ export function makeStack(): Stack {
   const ocr = new FakeOcr();
   const receipts = new ReceiptService(db, companies, expenses, files, ocr, { concurrency: 2, today: () => TODAY });
   const stack: Stack = {
-    dir, db, companies, properties, categories, expenses, financials, files, receipts, ocr, receiptsDir,
+    dir, db, companies, properties, businessTypes, income, categories, expenses, financials, files, receipts, ocr, receiptsDir,
     cat: (companyId, name) => {
       const c = categories.list(companyId, true).find((x) => x.name === name);
       if (!c) throw new Error(`no category ${name}`);
@@ -66,6 +72,28 @@ export const prop = (over: Partial<PropertyFields> = {}): PropertyFields => ({
   address1: '125 Oak Drive', address2: '', city: 'Riverton', state: 'TN', zip: '37201',
   purchaseDate: '2025-01-15', purchasePriceCents: 20_000_000, status: 'Held',
   saleDate: null, salePriceCents: null, description: '', notes: '', ...over,
+});
+
+/** A vehicle (the built-in buy-and-sell type, id 3): a name instead of an address. */
+export const vehicle = (over: Partial<PropertyFields> = {}): PropertyFields => ({
+  address1: '2018 Honda Accord', address2: '', city: '', state: '', zip: '', identifier: '1HGCV1F3XJA000001',
+  purchaseDate: '2026-01-10', purchasePriceCents: 1_000_000, status: 'Held',
+  saleDate: null, salePriceCents: null, description: '', notes: '', businessTypeId: 3, ...over,
+});
+
+/** A rental (the built-in rental type, id 2): an address, with the purchase optional. */
+export const rental = (over: Partial<PropertyFields> = {}): PropertyFields => ({
+  address1: '8 Elm Court', address2: '', city: 'Riverton', state: 'TN', zip: '37201',
+  purchaseDate: null, purchasePriceCents: null, status: 'Held',
+  saleDate: null, salePriceCents: null, description: '', notes: '', businessTypeId: 2, ...over,
+});
+
+export const RENTAL_TYPE = 2;
+export const VEHICLE_TYPE = 3;
+
+let incomeCounter = 0;
+export const inc = (companyId: number, propertyId: number, date: string, cents: number, category = 'Rent', over: Partial<IncomeInput> = {}): IncomeInput => ({
+  companyId, propertyId, incomeDate: date, amountCents: cents, category, notes: '', idempotencyKey: `income-key-${String(++incomeCounter).padStart(8, '0')}`, ...over,
 });
 
 let keyCounter = 0;

@@ -382,7 +382,7 @@ function DraftForm({ draft, active, onNext, reload }: { draft: ReceiptDraftDetai
         </label>
         {split && totalCents !== null && <p className="muted num">Total {formatCents(totalCents)} · assigned {formatCents(allocatedCents(allocLines))}</p>}
         {split && (serverErrors.allocations || (showErrors && allocV.total)) && <p className="field__error" role="alert">{serverErrors.allocations ?? allocV.total}</p>}
-        <SelectField label="Property" optional value={propertyId} onChange={(e) => { setPropertyId(e.target.value); void persist({ propertyId: e.target.value ? Number(e.target.value) : null }); }}>
+        <SelectField label="Asset" optional value={propertyId} onChange={(e) => { setPropertyId(e.target.value); void persist({ propertyId: e.target.value ? Number(e.target.value) : null }); }}>
           {propertyOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </SelectField>
         {!split && vendor.trim() && categoryId && (

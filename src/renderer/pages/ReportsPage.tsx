@@ -9,11 +9,12 @@ import { periodPresets } from '../periods';
 import { parseUsDate } from '../../shared/dates';
 import type { ReportKind, ReportRequest } from '../../shared/reportTypes';
 
-const KINDS: { kind: ReportKind; label: string; help: string; needs: 'sale' | 'expense' | 'none' | 'property' }[] = [
-  { kind: 'sold-performance', label: 'Sold-property performance', help: 'Properties sold in a period (by sale date), with their full lifetime costs and profit.', needs: 'sale' },
-  { kind: 'expense-activity', label: 'Expense activity', help: 'Expenses dated in a period (by expense date), by category and property. General company expenses are listed separately.', needs: 'expense' },
-  { kind: 'portfolio-snapshot', label: 'Current portfolio snapshot', help: 'Investment recorded in unsold properties, and realized results of sold properties, kept apart.', needs: 'none' },
-  { kind: 'property', label: 'Individual property', help: 'One property from purchase to sale or today: cost bridge, year by year, every expense.', needs: 'property' },
+const KINDS: { kind: ReportKind; label: string; help: string; needs: 'sale' | 'expense' | 'income' | 'none' | 'property' }[] = [
+  { kind: 'sold-performance', label: 'Sold-asset performance', help: 'Renovations and vehicles sold in a period (by sale date), with their full lifetime costs and profit.', needs: 'sale' },
+  { kind: 'income-expense', label: 'Rental and other income', help: 'Income received and expenses paid by rentals and ongoing businesses in a period, by item, month and category.', needs: 'income' },
+  { kind: 'expense-activity', label: 'Expense activity', help: 'Expenses dated in a period (by expense date), by category and asset. General company expenses are listed separately.', needs: 'expense' },
+  { kind: 'portfolio-snapshot', label: 'Current portfolio snapshot', help: 'Investment recorded in unsold renovations and vehicles, and realized results of sold ones, kept apart.', needs: 'none' },
+  { kind: 'property', label: 'Individual asset', help: 'One asset from start to today: costs and profit for a renovation or vehicle, or income and expenses by year for a rental.', needs: 'property' },
 ];
 
 const iso = (t: string): string | null => { const r = parseUsDate(t); return r.ok ? r.iso : null; };
@@ -32,8 +33,9 @@ export function ReportsPage() {
   const meta = KINDS.find((k) => k.kind === kind)!;
   const preset = presets.find((p) => p.key === period)!;
   const custom = period === 'custom';
-  const from = meta.needs === 'sale' || meta.needs === 'expense' ? (custom ? iso(fromText) : preset.from) : null;
-  const to = meta.needs === 'sale' || meta.needs === 'expense' ? (custom ? iso(toText) : preset.to) : null;
+  const ranged = meta.needs === 'sale' || meta.needs === 'expense' || meta.needs === 'income';
+  const from = ranged ? (custom ? iso(fromText) : preset.from) : null;
+  const to = ranged ? (custom ? iso(toText) : preset.to) : null;
   const badRange = custom && ((fromText && !iso(fromText)) || (toText && !iso(toText)) || (from && to && to < from));
 
   const { data: props } = useLoad(() => (scope === 'all' ? Promise.resolve(null) : unwrap(api().listProperties({ scope, pageSize: 100, sort: 'address', includeArchived: true }))), [scope]);
@@ -82,9 +84,9 @@ export function ReportsPage() {
             ))}
           </div>
           <div className="report-filters">
-            {(meta.needs === 'sale' || meta.needs === 'expense') && (
+            {ranged && (
               <>
-                <SelectField label={meta.needs === 'sale' ? 'Sale date range' : 'Expense date range'} value={period} onChange={(e) => setPeriod(e.target.value)}>
+                <SelectField label={meta.needs === 'sale' ? 'Sale date range' : meta.needs === 'income' ? 'Date range' : 'Expense date range'} value={period} onChange={(e) => setPeriod(e.target.value)}>
                   {presets.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </SelectField>
                 {custom && (
@@ -97,15 +99,15 @@ export function ReportsPage() {
             )}
             {needsProperty && (
               scope === 'all'
-                ? <Notice>Choose one company in the sidebar to pick a property.</Notice>
-                : <SelectField label="Property" required value={propertyForScope} onChange={(e) => setPropertyId(e.target.value)}>
-                    <option value="">Choose a property…</option>
+                ? <Notice>Choose one company in the sidebar to pick an asset.</Notice>
+                : <SelectField label="Asset" required value={propertyForScope} onChange={(e) => setPropertyId(e.target.value)}>
+                    <option value="">Choose an asset…</option>
                     {(props?.rows ?? []).map((p) => <option key={p.id} value={p.id}>{p.address1}{p.isArchived ? ' (archived)' : ''}</option>)}
                   </SelectField>
             )}
           </div>
         </div>
-        <p className="muted small">These are management reports built from the records in Gable. They are not financial statements, tax returns, or cash-flow reports.</p>
+        <p className="muted small">These are management reports built from the records in Gable. They are not financial statements or tax returns.</p>
         {error && <ErrorState title="Could not build this report">{error}</ErrorState>}
         {!error && loading && !doc && <p className="muted">Building report…</p>}
         {!error && doc && <ReportView doc={doc} />}

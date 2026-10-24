@@ -58,7 +58,7 @@ test('search is scoped per company and labeled in All Companies', async () => {
   const page = await app.firstWindow();
   await go(page, '/properties');
   await switchCompany(page, /Oak House/);
-  const search = page.getByRole('searchbox', { name: /Search address/ });
+  const search = page.getByRole('searchbox', { name: /Search name/ });
   await search.fill('oak');
   await expect(page.getByRole('link', { name: '125 Oak Drive' })).toBeVisible();
   await expect(page.getByRole('link', { name: /17 Oak Hollow/ })).toHaveCount(0);
@@ -74,7 +74,7 @@ test('search is scoped per company and labeled in All Companies', async () => {
   await search.fill("st. mary's");
   await expect(page.getByRole('link', { name: /St\. Mary's Lane/ })).toBeVisible();
   await search.fill('zzz');
-  await expect(page.getByText('No matching properties')).toBeVisible();
+  await expect(page.getByText('No matching assets')).toBeVisible();
   await page.getByRole('button', { name: 'Clear filters' }).first().click();
   await expect(page.getByRole('link', { name: '125 Oak Drive' })).toBeVisible();
   await app.close();
@@ -137,10 +137,13 @@ test('adding a property from All Companies requires choosing the company first',
   const page = await app.firstWindow();
   await go(page, '/properties');
   await switchCompany(page, /All Companies/);
-  await page.getByRole('button', { name: 'Add property' }).click();
-  await expect(page.getByRole('heading', { name: 'Add property' })).toBeVisible();
+  await page.getByRole('button', { name: 'Add asset' }).click();
+  await expect(page.getByRole('heading', { name: 'Add an asset' })).toBeVisible();
   await expect(page.getByText(/read only/)).toBeVisible();
   await page.locator('main').getByRole('combobox', { name: /^Company/ }).selectOption({ label: 'North Property LLC' });
+  await expect(page.getByRole('heading', { name: 'What are you adding?' })).toBeVisible();
+  await page.getByRole('button', { name: /^Renovation/ }).click();
+  await expect(page.getByRole('heading', { name: 'Add renovation property' })).toBeVisible();
   await expect(page.locator('.static-value')).toHaveText('North Property LLC');
   await app.close();
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
@@ -152,7 +155,7 @@ test("a company's expense form only offers that company's properties", async () 
   const page = await app.firstWindow();
   await switchCompany(page, /Oak House/);
   await go(page, '/expenses/new');
-  await page.getByRole('combobox', { name: /^Property/ }).click();
+  await page.getByRole('combobox', { name: /^Asset/ }).click();
   await expect(page.getByRole('option', { name: /48 Willow Court/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /17 Oak Hollow/ })).toHaveCount(0);
   await expect(page.getByRole('option', { name: /310 Cedar Ridge/ })).toHaveCount(0);

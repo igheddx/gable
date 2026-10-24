@@ -5,11 +5,13 @@ import { PageHeader } from '../shell/Shell';
 import { useApp } from '../shell/AppContext';
 import { api, unwrap, useDebounced, useLoad } from '../api';
 import { PROPERTY_STATUSES } from '../../shared/schemas';
+import { TEMPLATE_INFO, statusLabel } from '../../shared/businessTypes';
 import { formatCents } from '../../shared/money';
 import { formatUsDate, parseUsDate } from '../../shared/dates';
 import type { PropertyQuery } from '../../shared/schemas';
 
 const TONE: Record<string, Tone> = { Held: 'neutral', Renovating: 'warning', Listed: 'info', Sold: 'success' };
+const STATUS_FILTER_LABEL = { Held: 'Held (in stock or active)', Renovating: 'Renovating or being fixed up', Listed: 'Listed for sale', Sold: 'Sold' } as const;
 type Sort = NonNullable<PropertyQuery['sort']>;
 
 const iso = (t: string): string | null => {
@@ -19,20 +21,21 @@ const iso = (t: string): string | null => {
 
 export function PropertiesPage() {
   const { scope, companyName, navigate } = useApp();
-  const [f, setF] = useState({ q: '', status: '', pf: '', pt: '', sf: '', st: '', archived: false });
+  const [f, setF] = useState({ q: '', status: '', type: '', pf: '', pt: '', sf: '', st: '', archived: false });
   const [sort, setSort] = useState<{ by: Sort; dir: 'asc' | 'desc' }>({ by: 'address', dir: 'asc' });
   const [page, setPage] = useState(1);
   const q = useDebounced(f.q, 250);
-  const filtersActive = Boolean(f.q || f.status || f.pf || f.pt || f.sf || f.st || f.archived);
+  const filtersActive = Boolean(f.q || f.status || f.type || f.pf || f.pt || f.sf || f.st || f.archived);
 
   const change = (patch: Partial<typeof f>) => { setF((x) => ({ ...x, ...patch })); setPage(1); };
-  const clear = () => { setF({ q: '', status: '', pf: '', pt: '', sf: '', st: '', archived: false }); setPage(1); };
+  const clear = () => { setF({ q: '', status: '', type: '', pf: '', pt: '', sf: '', st: '', archived: false }); setPage(1); };
+  const { data: types } = useLoad(() => unwrap(api().listBusinessTypes(false)), []);
 
   const query: PropertyQuery = useMemo(() => ({
-    scope, q, status: (f.status || null) as PropertyQuery['status'], includeArchived: f.archived,
+    scope, q, status: (f.status || null) as PropertyQuery['status'], businessTypeId: f.type ? Number(f.type) : null, includeArchived: f.archived,
     purchaseFrom: iso(f.pf), purchaseTo: iso(f.pt), saleFrom: iso(f.sf), saleTo: iso(f.st),
     sort: sort.by, dir: sort.dir, page, pageSize: 25,
-  }), [scope, q, f.status, f.archived, f.pf, f.pt, f.sf, f.st, sort, page]);
+  }), [scope, q, f.status, f.type, f.archived, f.pf, f.pt, f.sf, f.st, sort, page]);
 
   const { data, error, loading, reload } = useLoad(() => unwrap(api().listProperties(query)), [JSON.stringify(query)]);
 
@@ -54,16 +57,20 @@ export function PropertiesPage() {
   return (
     <>
       <PageHeader
-        title="Properties"
-        context={scope === 'all' ? 'All companies · view only. Choose a company to add a property.' : companyName(scope)}
-        actions={<Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} onClick={() => navigate(addHref)}>Add property</Button>}
+        title="Assets"
+        context={scope === 'all' ? 'All companies · view only. Choose a company to add an asset.' : companyName(scope)}
+        actions={<Button variant="primary" icon={<Plus size={16} aria-hidden="true" />} onClick={() => navigate(addHref)}>Add asset</Button>}
       />
       <div className="page-body">
-        <div className="filters filters--props" role="search" aria-label="Filter properties">
-          <TextField label="Search address, city or ZIP" value={f.q} onChange={(e) => change({ q: e.target.value })} placeholder="For example: oak, or 372" type="search" />
+        <div className="filters filters--props" role="search" aria-label="Filter assets">
+          <TextField label="Search name, address, city, ZIP or ID" value={f.q} onChange={(e) => change({ q: e.target.value })} placeholder="For example: oak, or accord" type="search" />
+          <SelectField label="Type" value={f.type} onChange={(e) => change({ type: e.target.value })}>
+            <option value="">All types</option>
+            {(types ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </SelectField>
           <SelectField label="Status" value={f.status} onChange={(e) => change({ status: e.target.value })}>
             <option value="">All statuses</option>
-            {PROPERTY_STATUSES.map((s) => <option key={s}>{s}</option>)}
+            {PROPERTY_STATUSES.map((s) => <option key={s} value={s}>{STATUS_FILTER_LABEL[s]}</option>)}
           </SelectField>
           <div className="filters__more">
             <details className="disclosure" open={Boolean(f.pf || f.pt || f.sf || f.st)}>
@@ -78,30 +85,31 @@ export function PropertiesPage() {
           </div>
           <label className="check"><input type="checkbox" checked={f.archived} onChange={(e) => change({ archived: e.target.checked })} /><span>Include archived</span></label>
           {filtersActive && <Button variant="ghost" size="sm" onClick={clear}>Clear filters</Button>}
-          <p className="filters__count muted" role="status">{data ? `${total} ${total === 1 ? 'property' : 'properties'}` : ''}</p>
+          <p className="filters__count muted" role="status">{data ? `${total} ${total === 1 ? 'asset' : 'assets'}` : ''}</p>
         </div>
 
         <div className="panel panel--flush" aria-busy={loading}>
           {error ? (
-            <ErrorState title="Could not load properties" action={<Button onClick={reload}>Try again</Button>}>{error}</ErrorState>
+            <ErrorState title="Could not load assets" action={<Button onClick={reload}>Try again</Button>}>{error}</ErrorState>
           ) : data && data.rows.length === 0 ? (
             filtersActive ? (
-              <EmptyState title="No matching properties" icon={<Search size={32} aria-hidden="true" />} action={<Button variant="secondary" onClick={clear}>Clear filters</Button>}>
-                Nothing matches these filters. Your properties are still there.
+              <EmptyState title="No matching assets" icon={<Search size={32} aria-hidden="true" />} action={<Button variant="secondary" onClick={clear}>Clear filters</Button>}>
+                Nothing matches these filters. Your assets are still there.
               </EmptyState>
             ) : (
-              <EmptyState title="No properties yet" action={<Button variant="primary" onClick={() => navigate(addHref)}>Add the first property</Button>}>
-                {scope === 'all' ? 'No company has any properties yet.' : `${companyName(scope)} has no properties yet.`}
+              <EmptyState title="No assets yet" action={<Button variant="primary" onClick={() => navigate(addHref)}>Add the first asset</Button>}>
+                {scope === 'all' ? 'No company has any assets yet.' : `${companyName(scope)} has no assets yet.`}
               </EmptyState>
             )
           ) : (
             <div className="table-wrap">
               <table className="table">
-                <caption className="sr-only">Properties</caption>
+                <caption className="sr-only">Assets</caption>
                 <thead>
                   <tr>
-                    {header('Address', 'address')}
-                    <th scope="col">City, ZIP</th>
+                    {header('Name or address', 'address')}
+                    <th scope="col">Type</th>
+                    <th scope="col">Details</th>
                     {scope === 'all' && <th scope="col">Company</th>}
                     {header('Status', 'status')}
                     {header('Purchased', 'purchaseDate')}
@@ -117,11 +125,12 @@ export function PropertiesPage() {
                         </a>
                         {p.isArchived && <> <Badge tone="neutral" small icon={false}>Archived</Badge></>}
                       </td>
-                      <td className="num">{p.city}, {p.state} {p.zip}</td>
+                      <td>{p.businessTypeName}</td>
+                      <td className="num">{TEMPLATE_INFO[p.template].hasAddress ? `${p.city}, ${p.state} ${p.zip}` : (p.identifier || <span className="muted">—</span>)}</td>
                       {scope === 'all' && <td>{p.companyName}</td>}
-                      <td><Badge tone={TONE[p.status]!} icon={false}>{p.status}</Badge></td>
-                      <td className="num">{formatUsDate(p.purchaseDate)}</td>
-                      <td className="money num">{formatCents(p.purchasePriceCents)}</td>
+                      <td><Badge tone={TONE[p.status]!} icon={false}>{statusLabel(p.template, p.status)}</Badge></td>
+                      <td className="num">{p.purchaseDate ? formatUsDate(p.purchaseDate) : <span className="muted">—</span>}</td>
+                      <td className="money num">{p.purchasePriceCents !== null ? formatCents(p.purchasePriceCents) : <span className="muted">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>

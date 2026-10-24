@@ -5,7 +5,9 @@ import { AppError } from '../shared/errors';
 import type { AppService } from '../services/appService';
 import type { CompanyService } from '../services/companyService';
 import type { PropertyService } from '../services/propertyService';
+import type { BusinessTypeService } from '../services/businessTypeService';
 import type { CategoryService } from '../services/categoryService';
+import type { IncomeService } from '../services/incomeService';
 import type { ExpenseService } from '../services/expenseService';
 import type { FinancialService } from '../services/financialService';
 import type { ReceiptService } from '../services/receiptService';
@@ -23,6 +25,8 @@ export interface Services {
   app: AppService;
   companies: CompanyService;
   properties: PropertyService;
+  businessTypes: BusinessTypeService;
+  income: IncomeService;
   categories: CategoryService;
   expenses: ExpenseService;
   financials: FinancialService;
@@ -103,6 +107,19 @@ export function buildHandlers(s: Services, platform: Platform): Handlers {
     'properties:archive': (i) => s.properties.archive(i.id),
     'properties:restore': (i) => s.properties.restore(i.id),
     'properties:financials': (i) => s.financials.propertyFinancials(i.id),
+    'properties:cashFlow': (i) => s.financials.cashFlow(i.id),
+
+    'businessTypes:list': (i) => s.businessTypes.list(i.includeArchived),
+    'businessTypes:create': (i) => s.businessTypes.create(i),
+    'businessTypes:rename': (i) => s.businessTypes.rename(i.id, i.name),
+    'businessTypes:archive': (i) => s.businessTypes.archive(i.id),
+    'businessTypes:restore': (i) => s.businessTypes.restore(i.id),
+
+    'income:create': (i) => s.income.create(i),
+    'income:update': (i) => s.income.update(i.id, i.input),
+    'income:void': (i) => s.income.void(i.id),
+    'income:unvoid': (i) => s.income.unvoid(i.id),
+    'income:list': (i) => s.income.list(i),
 
     'categories:list': (i) => s.categories.list(i.companyId, i.includeArchived),
     'categories:create': (i) => s.categories.create(i.companyId, i.name, i.reportingGroup),

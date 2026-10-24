@@ -42,5 +42,16 @@ export const STARTER_CATEGORIES: ReadonlyArray<{ name: string; group: ReportingG
   { name: 'Other', group: 'other' },
 ];
 
+/** Added when cars and rentals were introduced. Existing companies get these through a migration. */
+export const ADDED_STARTER_CATEGORIES: ReadonlyArray<{ name: string; group: ReportingGroup }> = [
+  { name: 'Parts & Repairs', group: 'renovation' },
+  { name: 'Detailing & Cleaning', group: 'renovation' },
+  { name: 'Title & Registration', group: 'purchase_closing' },
+  { name: 'Transport & Delivery', group: 'holding' },
+  { name: 'Advertising & Listing Fees', group: 'selling_other' },
+  { name: 'Property Management Fees', group: 'holding' },
+  { name: 'Legal & Professional', group: 'other' },
+];
+
 /** Selling costs shown as one line in the bridge, with the three groups detailed beneath. */
 export const SELLING_GROUPS: ReportingGroup[] = ['selling_realtor', 'selling_closing', 'selling_other'];

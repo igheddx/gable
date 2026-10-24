@@ -1,5 +1,5 @@
 import type { Db } from './connection';
-import { STARTER_CATEGORIES, type ReportingGroup } from '../shared/categories';
+import { ADDED_STARTER_CATEGORIES, STARTER_CATEGORIES, type ReportingGroup } from '../shared/categories';
 import { normalizeSearch } from '../shared/search';
 import type { Category } from '../shared/types';
 
@@ -45,7 +45,7 @@ export class CategoryRepository {
   }
 
   seedStarter(companyId: number, now: string): void {
-    STARTER_CATEGORIES.forEach((c, i) => {
+    [...STARTER_CATEGORIES, ...ADDED_STARTER_CATEGORIES].forEach((c, i) => {
       this.db
         .prepare('INSERT INTO category (company_id, name, name_key, reporting_group, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(companyId, c.name, normalizeSearch(c.name), c.group, i, now, now);

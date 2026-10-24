@@ -90,6 +90,13 @@ export function SettingsPage() {
         </div>
         <div className="panel narrow settings-link">
           <div>
+            <h2 className="panel__title">Business types</h2>
+            <p className="muted">Renovations, rentals and vehicles are built in. Add other kinds of business to track, such as boats or equipment.</p>
+          </div>
+          <Button variant="secondary" onClick={() => navigate('/settings/business-types')}>Manage business types</Button>
+        </div>
+        <div className="panel narrow settings-link">
+          <div>
             <h2 className="panel__title">Categories</h2>
             <p className="muted">Customize the expense categories for each company and see how they roll up in reports.</p>
           </div>
@@ -114,7 +121,7 @@ export function SettingsPage() {
         onClose={() => setArchiving(null)}
         actions={<><Button variant="secondary" onClick={() => setArchiving(null)} autoFocus>Cancel</Button><Button variant="danger" onClick={() => void confirmArchive()} disabled={busy}>Archive company</Button></>}
       >
-        <p>Archiving hides the company and stops new properties and expenses from being added to it. Nothing is deleted, and you can restore it later.</p>
+        <p>Archiving hides the company and stops new assets, income and expenses from being added to it. Nothing is deleted, and you can restore it later.</p>
         {archiving?.isDefault && (
           <>
             <Notice>{archiving.displayName} is your default company. Choose the company Gable should open to instead.</Notice>

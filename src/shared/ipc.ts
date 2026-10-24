@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { categoryInputSchema, companyInputSchema, draftPatchSchema, draftQuerySchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
+import { businessTypeInputSchema, categoryInputSchema, companyInputSchema, draftPatchSchema, draftQuerySchema, expenseInputSchema, expenseQuerySchema, expenseUpdateSchema, incomeInputSchema, incomeQuerySchema, incomeUpdateSchema, propertyFieldsSchema, propertyQuerySchema, reportingGroupSchema } from './schemas';
 import type { OverviewData, ReportDoc, ReportRequest } from './reportTypes';
 import type { BackupRunResult, BackupStatus, FileCheck, RestorePreview } from './types';
-import type { Category, Company, Expense, ExpenseDetail, ExpensePage, ImportResult, PostAllResult, Property, PropertyFinancials, PropertyPage, ReceiptDraft, ReceiptDraftDetail, ReceiptEvent, StagedFile, VendorRule } from './types';
+import type { BusinessType } from './businessTypes';
+import type { CashFlow, Category, Company, Expense, ExpenseDetail, ExpensePage, ImportResult, Income, IncomePage, PostAllResult, Property, PropertyFinancials, PropertyPage, ReceiptDraft, ReceiptDraftDetail, ReceiptEvent, StagedFile, VendorRule } from './types';
 
 /**
  * The complete renderer-to-main contract. Every channel has an input schema; the main
@@ -20,7 +21,7 @@ const id = z.number().int().positive();
 const isoDateOrNull = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 const reportRequestSchema = z
   .object({
-    kind: z.enum(['property', 'sold-performance', 'expense-activity', 'portfolio-snapshot']),
+    kind: z.enum(['property', 'sold-performance', 'expense-activity', 'portfolio-snapshot', 'income-expense']),
     scope: z.union([z.number().int().positive(), z.literal('all')]),
     from: isoDateOrNull,
     to: isoDateOrNull,
@@ -50,6 +51,19 @@ export const ipcContract = {
   'properties:archive': { input: z.object({ id }).strict() },
   'properties:restore': { input: z.object({ id }).strict() },
   'properties:financials': { input: z.object({ id }).strict() },
+  'properties:cashFlow': { input: z.object({ id }).strict() },
+
+  'businessTypes:list': { input: z.object({ includeArchived: z.boolean().default(false) }).strict() },
+  'businessTypes:create': { input: businessTypeInputSchema },
+  'businessTypes:rename': { input: z.object({ id, name: z.string().trim().max(60) }).strict() },
+  'businessTypes:archive': { input: z.object({ id }).strict() },
+  'businessTypes:restore': { input: z.object({ id }).strict() },
+
+  'income:create': { input: incomeInputSchema },
+  'income:update': { input: z.object({ id, input: incomeUpdateSchema }).strict() },
+  'income:void': { input: z.object({ id }).strict() },
+  'income:unvoid': { input: z.object({ id }).strict() },
+  'income:list': { input: incomeQuerySchema },
 
   'categories:list': { input: z.object({ companyId: id, includeArchived: z.boolean().default(false) }).strict() },
   'categories:create': { input: categoryInputSchema },
@@ -160,6 +174,20 @@ export interface GableApi {
   archiveProperty(id: number): R<Property>;
   restoreProperty(id: number): R<Property>;
   getPropertyFinancials(id: number): R<PropertyFinancials>;
+  /** Income, expenses and net income by year, for rentals and ongoing businesses. */
+  getPropertyCashFlow(id: number): R<CashFlow>;
+
+  listBusinessTypes(includeArchived?: boolean): R<BusinessType[]>;
+  createBusinessType(input: z.infer<typeof businessTypeInputSchema>): R<BusinessType>;
+  renameBusinessType(id: number, name: string): R<BusinessType>;
+  archiveBusinessType(id: number): R<BusinessType>;
+  restoreBusinessType(id: number): R<BusinessType>;
+
+  createIncome(input: z.input<typeof incomeInputSchema>): R<Income>;
+  updateIncome(id: number, input: z.input<typeof incomeUpdateSchema>): R<Income>;
+  voidIncome(id: number): R<Income>;
+  unvoidIncome(id: number): R<Income>;
+  listIncome(query: z.input<typeof incomeQuerySchema>): R<IncomePage>;
 
   listCategories(companyId: number, includeArchived?: boolean): R<Category[]>;
   createCategory(input: z.infer<typeof categoryInputSchema>): R<Category>;

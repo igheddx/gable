@@ -1,13 +1,14 @@
 import markUrl from '../assets/gable-mark.png';
 import type { ReactNode } from 'react';
-import { BarChart3, Building2, FileText, Home, Receipt, Settings as SettingsIcon, Palette } from 'lucide-react';
+import { Banknote, BarChart3, Building2, FileText, Home, Receipt, Settings as SettingsIcon, Palette } from 'lucide-react';
 import { useApp } from './AppContext';
 import { SHOWCASE_ENABLED } from '../env';
 
 const NAV = [
   { path: '/overview', label: 'Overview', icon: Home },
-  { path: '/properties', label: 'Properties', icon: Building2 },
+  { path: '/properties', label: 'Assets', icon: Building2 },
   { path: '/expenses', label: 'Expenses', icon: Receipt },
+  { path: '/income', label: 'Income', icon: Banknote },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
 

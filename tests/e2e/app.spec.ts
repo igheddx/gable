@@ -17,7 +17,7 @@ test('opens, initializes the database, and reports app info over IPC', async () 
   const page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'Welcome to Gable' })).toBeVisible(); // first run: no companies yet
   const info = await page.evaluate(() => (window as any).gable.getAppInfo());
-  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 4 } });
+  expect(info).toMatchObject({ ok: true, value: { name: 'Gable', schemaVersion: 5 } });
   expect(fs.existsSync(path.join(dataDir, 'data', 'gable.db'))).toBe(true);
   await app.close();
 });
@@ -44,7 +44,9 @@ test('renderer is isolated: no Node, no raw filesystem/SQL, only the named API',
         'removeReceipt', 'retryReceipt', 'skipReceipt', 'unskipReceipt', 'updateReceipt',
         'buildReport', 'exportReportPdf', 'exportReportXlsx', 'getOverview',
         'chooseBackupFolder', 'discardRestore', 'getBackupStatus', 'inspectBackup', 'restoreBackup', 'runBackup', 'setAutoBackup',
-        'useDefaultBackupFolder', 'checkReceiptFiles']).sort(),
+        'useDefaultBackupFolder', 'checkReceiptFiles',
+        'archiveBusinessType', 'createBusinessType', 'listBusinessTypes', 'renameBusinessType', 'restoreBusinessType',
+        'createIncome', 'getPropertyCashFlow', 'listIncome', 'unvoidIncome', 'updateIncome', 'voidIncome']).sort(),
   );
   // Task-specific methods only: nothing that takes a SQL string, a file path, or a channel name.
   expect(probe.api.some((k: string) => /sql|query|exec|invoke|send|path|(?<!stageReceipt)file(?!s)/i.test(k))).toBe(false);

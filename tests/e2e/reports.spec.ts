@@ -113,7 +113,7 @@ test('overview shows the four figures separately and company subtotals in All Co
   await page.getByRole('textbox', { name: 'From' }).fill('01/01/2026');
   await page.getByRole('textbox', { name: 'To' }).fill('12/31/2026');
   const figures = page.getByRole('region', { name: 'Key figures' });
-  await expect(figures).toContainText('Active properties');
+  await expect(figures).toContainText('Active assets');
   await expect(figures).toContainText('$112,000.00'); // realized profit on properties sold in 2026
   await expect(figures).toContainText('$1,000.00'); // general company expenses, kept separate
   await expect(figures).toContainText('Not a market value');

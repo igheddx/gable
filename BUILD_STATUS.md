@@ -72,6 +72,19 @@ Commit `57ab498` (all stages, app icon, docs): GitHub Actions **success on Windo
 - Verified on macOS: 42 unit tests in `tests/unit/backup.test.ts` (round trip, corrupt/truncated/unsafe/future archives, fault injection at every restore step, older-schema upgrade, low disk, busy database, retention). Packaged-app backup tests exist; one (auto-backup checkbox) was fixed but not re-run.
 - NOT verified: Stage 7 on Windows; the native folder and file dialogs; restart-after-restore on a real install.
 
+## Business types, rentals and vehicles (2026-10-24, macOS)
+
+Added at the owner's request after the original guide: Renovation, Rental and Vehicle asset types plus owner-defined types (Settings → Business types), income entry for rentals and ongoing businesses, a rental/other income report, and a per-asset cash-flow report. Design and rules are in PRODUCT.md (F3a) and ARCHITECTURE.md (section 5). Default decisions the owner chose: one list of "Assets" with a type filter, and income and expenses only for rentals (no tenants or leases).
+
+| Check | Result |
+| --- | --- |
+| Unit and integration | PASS: 273 tests (24 new) covering the upgrade of an existing v4 database with a property, expense and receipt draft (rows kept, foreign-key and integrity checks clean, triggers intact, new categories added), business types, per-type validation, income, cash flow, and the new and changed reports |
+| Guide fixtures | PASS and unchanged: $268,000 / $42,000 / 15.67%, $280,000 / $70,000 / 25.00%, 1,885 and 424 days. A vehicle uses the same cost, profit and ROI math (test: $11,700 cost, $2,300 profit, 19.66%) |
+| Packaged app, macOS | PASS: 47 of 47 (3 new: custom type then buy, repair and sell a car; a rental with rent, late fee, expense, void and restore, income page, overview and report; income not offered for renovations). Screens reviewed by eye at 1366x768 |
+| Not verified | Windows run of this change; real-world use of the new screens by David; Excel/PDF export of the two new report layouts was not opened by eye (they use the same builders as the existing reports) |
+
+Known limits: a sold rental is not included in sold-asset profit (rentals are tracked by net income); the purchase price of a rental is shown for reference only; a custom type's template cannot be changed after it is created; no tenants, leases or reminders.
+
 ## Reader failure on Windows: cause found and fixed (2026-10-24), stability still being watched
 
 On Windows CI the "mixed batch" receipt test failed in 2 of 5 repeated runs (and failed in the main CI run for `1a2ea22`). The app log showed the receipt reads all finishing, and one PDF page preview failing with `ReferenceError: Path2D is not defined`: pdf.js only installs Path2D and DOMMatrix itself when it believes it runs in plain Node, which it does not in Electron's reader process. The reader now provides them (`src/services/ocr/pipeline.ts`), and a unit test removes them first and reproduces the exact error without the fix.

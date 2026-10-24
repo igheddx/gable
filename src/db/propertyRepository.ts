@@ -10,13 +10,17 @@ interface Row {
   company_id: number;
   company_name: string;
   company_archived: number;
+  business_type_id: number;
+  business_type_name: string;
+  template: Property['template'];
   address1: string;
   address2: string | null;
   city: string;
   state: string;
   zip: string;
-  purchase_date: string;
-  purchase_price_cents: number;
+  identifier: string | null;
+  purchase_date: string | null;
+  purchase_price_cents: number | null;
   status: Property['status'];
   sale_date: string | null;
   sale_price_cents: number | null;
@@ -27,20 +31,25 @@ interface Row {
 
 const SELECT = `
   SELECT p.id, p.company_id, c.display_name AS company_name, c.is_archived AS company_archived,
-         p.address1, p.address2, p.city, p.state, p.zip, p.purchase_date, p.purchase_price_cents,
+         p.business_type_id, bt.name AS business_type_name, bt.template,
+         p.address1, p.address2, p.city, p.state, p.zip, p.identifier, p.purchase_date, p.purchase_price_cents,
          p.status, p.sale_date, p.sale_price_cents, p.description, p.notes, p.is_archived
-  FROM property p JOIN company c ON c.id = p.company_id`;
+  FROM property p JOIN company c ON c.id = p.company_id JOIN business_type bt ON bt.id = p.business_type_id`;
 
 const toDto = (r: Row): Property => ({
   id: r.id,
   companyId: r.company_id,
   companyName: r.company_name,
   companyArchived: r.company_archived === 1,
+  businessTypeId: r.business_type_id,
+  businessTypeName: r.business_type_name,
+  template: r.template,
   address1: r.address1,
   address2: r.address2 ?? '',
   city: r.city,
   state: r.state,
   zip: r.zip,
+  identifier: r.identifier ?? '',
   purchaseDate: r.purchase_date,
   purchasePriceCents: r.purchase_price_cents,
   status: r.status,
@@ -71,23 +80,23 @@ export class PropertyRepository {
   insert(companyId: number, f: PropertyFields, searchText: string, now: string): number {
     const r = this.db
       .prepare(
-        `INSERT INTO property (company_id, address1, address2, city, state, zip, search_text, purchase_date, purchase_price_cents,
-           status, sale_date, sale_price_cents, description, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO property (company_id, business_type_id, address1, address2, city, state, zip, identifier, search_text, purchase_date,
+           purchase_price_cents, status, sale_date, sale_price_cents, description, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(companyId, f.address1, blank(f.address2), f.city, f.state, f.zip, searchText, f.purchaseDate, f.purchasePriceCents,
-        f.status, f.saleDate, f.salePriceCents, blank(f.description), blank(f.notes), now, now);
+      .run(companyId, f.businessTypeId ?? 1, f.address1, blank(f.address2), f.city, f.state, f.zip, blank(f.identifier ?? ''), searchText, f.purchaseDate,
+        f.purchasePriceCents, f.status, f.saleDate, f.salePriceCents, blank(f.description), blank(f.notes), now, now);
     return Number(r.lastInsertRowid);
   }
 
   update(id: number, f: PropertyFields, searchText: string, now: string): void {
     this.db
       .prepare(
-        `UPDATE property SET address1 = ?, address2 = ?, city = ?, state = ?, zip = ?, search_text = ?, purchase_date = ?,
+        `UPDATE property SET address1 = ?, address2 = ?, city = ?, state = ?, zip = ?, identifier = ?, search_text = ?, purchase_date = ?,
            purchase_price_cents = ?, status = ?, sale_date = ?, sale_price_cents = ?, description = ?, notes = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .run(f.address1, blank(f.address2), f.city, f.state, f.zip, searchText, f.purchaseDate, f.purchasePriceCents,
+      .run(f.address1, blank(f.address2), f.city, f.state, f.zip, blank(f.identifier ?? ''), searchText, f.purchaseDate, f.purchasePriceCents,
         f.status, f.saleDate, f.salePriceCents, blank(f.description), blank(f.notes), now, id);
   }
 
@@ -118,6 +127,7 @@ export class PropertyRepository {
       if (to) { where.push(`${col} <= ?`); params.push(to); }
     };
     if (q.status) { where.push('p.status = ?'); params.push(q.status); }
+    if (q.businessTypeId !== null) { where.push('p.business_type_id = ?'); params.push(q.businessTypeId); }
     range('p.purchase_date', q.purchaseFrom, q.purchaseTo);
     range('p.sale_date', q.saleFrom, q.saleTo);
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';

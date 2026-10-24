@@ -1,4 +1,4 @@
-import { REPORTING_GROUPS, STARTER_CATEGORIES } from '../../shared/categories';
+import { ADDED_STARTER_CATEGORIES, REPORTING_GROUPS, STARTER_CATEGORIES } from '../../shared/categories';
 import { normalizeSearch } from '../../shared/search';
 
 /** Forward-only migrations. Each runs in its own transaction. Never edit a shipped one. */
@@ -281,6 +281,145 @@ export const migrations: Migration[] = [
           WHERE NEW.category_id IS NOT NULL AND (SELECT company_id FROM category WHERE id = NEW.category_id) IS NOT NEW.company_id;
         SELECT RAISE(ABORT, 'a saved draft cannot be changed') WHERE OLD.status = 'saved' AND NEW.status <> 'saved';
       END;
+    `,
+  },
+  {
+    version: 5,
+    name: 'business-types-and-income',
+    sql: `
+      -- The property table is rebuilt: addresses become optional (a car has a name, not an address) and purchase
+      -- details become optional (a rental or an ongoing business may have none). Foreign keys from expenses and
+      -- receipt drafts are checked when the migration commits, after the new table has taken the old one's place.
+      PRAGMA defer_foreign_keys = ON;
+
+      CREATE TABLE business_type (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 60),
+        name_key   TEXT NOT NULL UNIQUE,
+        template   TEXT NOT NULL CHECK (template IN ('renovation', 'rental', 'buy_sell', 'income_expense')),
+        is_builtin INTEGER NOT NULL DEFAULT 0 CHECK (is_builtin IN (0, 1)),
+        is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+      INSERT INTO business_type (id, name, name_key, template, is_builtin, sort_order, created_at, updated_at) VALUES
+        (1, 'Renovation', 'renovation', 'renovation', 1, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        (2, 'Rental', 'rental', 'rental', 1, 2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        (3, 'Vehicle', 'vehicle', 'buy_sell', 1, 3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+      -- Keep the rows aside, replace the table, and put the rows back with the same ids. Expenses and drafts that
+      -- point at these ids are only checked when the migration commits, by which time every row is back.
+      CREATE TABLE property_keep AS SELECT * FROM property;
+      DROP TABLE property;
+
+      CREATE TABLE property (
+        id                   INTEGER PRIMARY KEY,
+        company_id           INTEGER NOT NULL REFERENCES company(id),
+        business_type_id     INTEGER NOT NULL DEFAULT 1 REFERENCES business_type(id),
+        address1             TEXT NOT NULL CHECK (length(address1) > 0),
+        address2             TEXT,
+        city                 TEXT NOT NULL,
+        state                TEXT NOT NULL CHECK (length(state) IN (0, 2)),
+        zip                  TEXT NOT NULL,
+        identifier           TEXT,
+        search_text          TEXT NOT NULL,
+        purchase_date        TEXT CHECK (purchase_date IS NULL OR purchase_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        purchase_price_cents INTEGER CHECK (purchase_price_cents IS NULL OR purchase_price_cents >= 0),
+        status               TEXT NOT NULL CHECK (status IN ('Held', 'Renovating', 'Listed', 'Sold')),
+        sale_date            TEXT CHECK (sale_date IS NULL OR sale_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        sale_price_cents     INTEGER CHECK (sale_price_cents IS NULL OR sale_price_cents >= 0),
+        description          TEXT,
+        notes                TEXT,
+        is_archived          INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+        created_at           TEXT NOT NULL,
+        updated_at           TEXT NOT NULL,
+        CHECK ((status = 'Sold') = (sale_date IS NOT NULL AND sale_price_cents IS NOT NULL)),
+        CHECK ((sale_date IS NULL) = (sale_price_cents IS NULL)),
+        CHECK ((purchase_date IS NULL) = (purchase_price_cents IS NULL)),
+        CHECK (sale_date IS NULL OR purchase_date IS NULL OR sale_date >= purchase_date)
+      ) STRICT;
+
+      INSERT INTO property (id, company_id, business_type_id, address1, address2, city, state, zip, identifier, search_text,
+        purchase_date, purchase_price_cents, status, sale_date, sale_price_cents, description, notes, is_archived, created_at, updated_at)
+      SELECT id, company_id, 1, address1, address2, city, state, zip, NULL, search_text,
+        purchase_date, purchase_price_cents, status, sale_date, sale_price_cents, description, notes, is_archived, created_at, updated_at
+      FROM property_keep;
+      DROP TABLE property_keep;
+
+      CREATE INDEX property_company_status ON property (company_id, status);
+      CREATE INDEX property_company_purchase ON property (company_id, purchase_date);
+      CREATE INDEX property_company_sale ON property (company_id, sale_date);
+      CREATE INDEX property_archived ON property (is_archived);
+      CREATE INDEX property_business_type ON property (business_type_id);
+
+      CREATE TRIGGER property_company_immutable
+      BEFORE UPDATE OF company_id ON property
+      WHEN NEW.company_id <> OLD.company_id
+      BEGIN
+        SELECT RAISE(ABORT, 'property company cannot be changed');
+      END;
+      CREATE TRIGGER property_company_active_insert
+      BEFORE INSERT ON property
+      WHEN (SELECT is_archived FROM company WHERE id = NEW.company_id) = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'company is archived');
+      END;
+      -- What an item is cannot change once it exists: an address and a name are different shapes of data.
+      CREATE TRIGGER property_type_immutable
+      BEFORE UPDATE OF business_type_id ON property
+      WHEN NEW.business_type_id <> OLD.business_type_id
+      BEGIN
+        SELECT RAISE(ABORT, 'business type cannot be changed');
+      END;
+      CREATE TRIGGER property_type_active_insert
+      BEFORE INSERT ON property
+      WHEN (SELECT is_archived FROM business_type WHERE id = NEW.business_type_id) = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'business type is archived');
+      END;
+
+      CREATE TABLE income (
+        id              INTEGER PRIMARY KEY,
+        company_id      INTEGER NOT NULL REFERENCES company(id),
+        property_id     INTEGER NOT NULL REFERENCES property(id),
+        income_date     TEXT NOT NULL CHECK (income_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        amount_cents    INTEGER NOT NULL CHECK (amount_cents > 0),
+        category        TEXT NOT NULL CHECK (length(category) BETWEEN 1 AND 60),
+        notes           TEXT,
+        status          TEXT NOT NULL DEFAULT 'posted' CHECK (status IN ('posted', 'voided')),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        voided_at       TEXT,
+        CHECK ((status = 'voided') = (voided_at IS NOT NULL))
+      ) STRICT;
+      CREATE INDEX income_company_date ON income (company_id, income_date);
+      CREATE INDEX income_property_date ON income (property_id, income_date);
+
+      CREATE TRIGGER income_insert_checks BEFORE INSERT ON income
+      BEGIN
+        SELECT RAISE(ABORT, 'company is archived') WHERE (SELECT is_archived FROM company WHERE id = NEW.company_id) = 1;
+        SELECT RAISE(ABORT, 'item belongs to a different company') WHERE (SELECT company_id FROM property WHERE id = NEW.property_id) IS NOT NEW.company_id;
+        SELECT RAISE(ABORT, 'item is archived') WHERE (SELECT is_archived FROM property WHERE id = NEW.property_id) = 1;
+        SELECT RAISE(ABORT, 'this kind of item does not take income')
+          WHERE (SELECT t.template FROM property p JOIN business_type t ON t.id = p.business_type_id WHERE p.id = NEW.property_id) NOT IN ('rental', 'income_expense');
+      END;
+      CREATE TRIGGER income_update_checks BEFORE UPDATE ON income
+      BEGIN
+        SELECT RAISE(ABORT, 'income company cannot be changed') WHERE NEW.company_id <> OLD.company_id;
+        SELECT RAISE(ABORT, 'income item cannot be changed') WHERE NEW.property_id <> OLD.property_id;
+      END;
+      CREATE TRIGGER income_no_delete BEFORE DELETE ON income
+      BEGIN
+        SELECT RAISE(ABORT, 'income is voided, never deleted');
+      END;
+
+      -- Every existing company gets the categories added for cars and rentals.
+      ${ADDED_STARTER_CATEGORIES.map(
+        (c, i) => `INSERT OR IGNORE INTO category (company_id, name, name_key, reporting_group, sort_order, created_at, updated_at)
+        SELECT id, '${c.name.replace(/'/g, "''")}', '${normalizeSearch(c.name)}', '${c.group}', ${STARTER_CATEGORIES.length + i}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now') FROM company;`,
+      ).join('\n      ')}
     `,
   },
 ];

@@ -42,7 +42,7 @@ test('negative amounts are rejected with guidance', async () => {
 });
 
 test('Save & add another keeps company, property and date, clears the rest, and focuses vendor', async () => {
-  await page.getByRole('combobox', { name: /^Property/ }).click();
+  await page.getByRole('combobox', { name: /^Asset/ }).click();
   await page.getByRole('option', { name: /48 Willow Court/ }).click();
   await page.getByRole('textbox', { name: /^Expense date/ }).fill('3/5/2021');
   await vendor().fill('Keystone Plumbing Co.');
@@ -54,7 +54,7 @@ test('Save & add another keeps company, property and date, clears the rest, and 
   await expect(vendor()).toHaveValue('');
   await expect(vendor()).toBeFocused();
   await expect(amount()).toHaveValue('');
-  await expect(page.getByRole('combobox', { name: /^Property/ })).toHaveValue('48 Willow Court');
+  await expect(page.getByRole('combobox', { name: /^Asset/ })).toHaveValue('48 Willow Court');
   await expect(page.getByRole('textbox', { name: /^Expense date/ })).toHaveValue('03/05/2021');
 });
 
@@ -83,14 +83,14 @@ test('split allocation must add up exactly to the total', async () => {
 
 test('leaving with unsaved work asks first, and Keep editing preserves the entry', async () => {
   await vendor().fill('Redwood Hardware');
-  await page.getByRole('link', { name: 'Properties' }).click();
+  await page.getByRole('link', { name: 'Assets' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Keep editing' }).click();
   await expect(vendor()).toHaveValue('Redwood Hardware');
-  await page.getByRole('link', { name: 'Properties' }).click();
+  await page.getByRole('link', { name: 'Assets' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
-  await expect(page.getByRole('heading', { name: 'Properties' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
 });
 
 test('switching company with unsaved work asks first and never moves the form', async () => {

@@ -29,7 +29,7 @@ export function ExpenseEntryPage() {
     return (
       <div className="page-body">
         <ErrorState title="Cannot open this expense" action={<Button onClick={() => navigate('/expenses')}>Back to expenses</Button>}>
-          {error ?? 'This property or its company is archived. Restore it before adding expenses.'}
+          {error ?? 'This asset or its company is archived. Restore it before adding expenses.'}
         </ErrorState>
       </div>
     );
@@ -90,7 +90,7 @@ function ExpenseForm({ preset, expense }: { preset?: Property; expense?: Expense
   const idByName = new Map(usable.map((c) => [c.name, c.id]));
   const nameById = new Map(usable.map((c) => [String(c.id), c.name]));
   const propertyOptions = [
-    { value: '', label: 'General company expense (no property)' },
+    { value: '', label: 'General company expense (no asset)' },
     ...(props?.rows ?? []).map((p) => ({ value: String(p.id), label: p.address1, detail: `${p.city} ${p.zip}` })),
   ];
   if (expense?.propertyId && !propertyOptions.some((o) => o.value === String(expense.propertyId))) {
@@ -228,9 +228,9 @@ function ExpenseForm({ preset, expense }: { preset?: Property; expense?: Expense
                 </SelectField>
               )}
 
-              <Combobox className="span-2" label="Property" optional options={propertyOptions} value={propertyId} onChange={setPropertyId}
-                disabled={!companyId} placeholder="General company expense (no property)" error={shown('propertyId')}
-                hint="Leave blank for overhead that does not belong to one property." />
+              <Combobox className="span-2" label="Asset" optional options={propertyOptions} value={propertyId} onChange={setPropertyId}
+                disabled={!companyId} placeholder="General company expense (no asset)" error={shown('propertyId')}
+                hint="A property, vehicle, rental or business. Leave blank for overhead that does not belong to one asset." />
 
               <Combobox className="span-2" label="Vendor" required freeText options={vendorOptions} value={vendor} onChange={setVendor}
                 inputRef={vendorRef} error={shown('vendorName', errors.vendor)} placeholder="Who was paid?" emptyText="New vendor. Press Tab to keep what you typed." />

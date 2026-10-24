@@ -62,8 +62,8 @@ export function ExpensesPage() {
                 <option value="">All categories</option>
                 {(cats ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.isArchived ? ' (archived)' : ''}</option>)}
               </SelectField>
-              <SelectField label="Property" value={f.property} onChange={(e) => change({ property: e.target.value })}>
-                <option value="">All properties</option>
+              <SelectField label="Asset" value={f.property} onChange={(e) => change({ property: e.target.value })}>
+                <option value="">All assets</option>
                 <option value="general">General company expenses</option>
                 {(props?.rows ?? []).map((p) => <option key={p.id} value={p.id}>{p.address1}</option>)}
               </SelectField>
@@ -97,7 +97,7 @@ export function ExpensesPage() {
                   <tr>
                     <th scope="col">Date</th>
                     <th scope="col">Vendor</th>
-                    <th scope="col">Property</th>
+                    <th scope="col">Asset</th>
                     {scope === 'all' && <th scope="col">Company</th>}
                     <th scope="col">Category</th>
                     <th scope="col"><span className="sr-only">Receipts</span></th>

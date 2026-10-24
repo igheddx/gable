@@ -122,7 +122,7 @@ export function ReceiptImport({ open, onClose, presetPropertyId = null, onImport
             {companies.map((c) => <option key={c.id} value={c.id}>{c.displayName}</option>)}
           </SelectField>
         )}
-        <SelectField label="Property" optional value={propertyId} onChange={(e) => setPropertyId(e.target.value)} disabled={!companyId || presetPropertyId !== null}>
+        <SelectField label="Asset" optional value={propertyId} onChange={(e) => setPropertyId(e.target.value)} disabled={!companyId || presetPropertyId !== null}>
           <option value="">General company expense</option>
           {(props?.rows ?? []).map((p) => <option key={p.id} value={p.id}>{p.address1}</option>)}
         </SelectField>

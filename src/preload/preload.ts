@@ -26,6 +26,19 @@ const api: GableApi = {
   archiveProperty: (id) => call('properties:archive', { id }),
   restoreProperty: (id) => call('properties:restore', { id }),
   getPropertyFinancials: (id) => call('properties:financials', { id }),
+  getPropertyCashFlow: (id) => call('properties:cashFlow', { id }),
+
+  listBusinessTypes: (includeArchived = false) => call('businessTypes:list', { includeArchived }),
+  createBusinessType: (input) => call('businessTypes:create', input),
+  renameBusinessType: (id, name) => call('businessTypes:rename', { id, name }),
+  archiveBusinessType: (id) => call('businessTypes:archive', { id }),
+  restoreBusinessType: (id) => call('businessTypes:restore', { id }),
+
+  createIncome: (input) => call('income:create', input),
+  updateIncome: (id, input) => call('income:update', { id, input }),
+  voidIncome: (id) => call('income:void', { id }),
+  unvoidIncome: (id) => call('income:unvoid', { id }),
+  listIncome: (query) => call('income:list', query),
 
   listCategories: (companyId, includeArchived = false) => call('categories:list', { companyId, includeArchived }),
   createCategory: (input) => call('categories:create', input),
