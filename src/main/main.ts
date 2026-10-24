@@ -183,6 +183,13 @@ if (!app.requestSingleInstanceLock()) {
     const workerFile = path.join(__dirname, 'ocrWorker.cjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
     const logger = createLogger(path.join(paths.root, 'logs'));
     logger.log(`start gable ${app.getVersion()} ${process.platform} ${process.arch}`);
+    // Diagnostics: note it in the log if the main process stops running its timers for a while.
+    let lastBeat = Date.now();
+    setInterval(() => {
+      const now = Date.now();
+      if (now - lastBeat > 2500) logger.log(`main process was unresponsive for ${now - lastBeat - 1000} ms`);
+      lastBeat = now;
+    }, 1000).unref();
     // Each reader is its own operating-system process, so a reader that gets stuck can be killed for real:
     // it can never freeze Gable or stop it from quitting, and a crash there cannot take Gable down.
     const spawn: Spawn = () => {

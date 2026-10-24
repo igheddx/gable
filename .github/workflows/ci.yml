@@ -22,6 +22,8 @@ jobs:
       - run: npx vitest run --reporter=default --reporter=github-actions
       # Packages the app and runs the Electron end-to-end tests against the packaged Gable.exe.
       - run: npm run test:e2e
+      - if: failure()
+        run: node scripts/ci-print-logs.mjs
       # Release-style build (inspect fuse off). Produces the Squirrel installer.
       - run: npm run make:win
       - uses: actions/upload-artifact@v4
