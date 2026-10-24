@@ -72,9 +72,11 @@ Commit `57ab498` (all stages, app icon, docs): GitHub Actions **success on Windo
 - Verified on macOS: 42 unit tests in `tests/unit/backup.test.ts` (round trip, corrupt/truncated/unsafe/future archives, fault injection at every restore step, older-schema upgrade, low disk, busy database, retention). Packaged-app backup tests exist; one (auto-backup checkbox) was fixed but not re-run.
 - NOT verified: Stage 7 on Windows; the native folder and file dialogs; restart-after-restore on a real install.
 
-## Open issue: intermittent second-launch reader hang (UNRESOLVED)
+## Reader failure on Windows: cause found and fixed (2026-10-24), stability still being watched
 
-Receipt reading now runs in separate killable processes with pdf.js bundled (this fixed PDF handling and the earlier quit hang). Remaining: in roughly 1 of 3 isolated runs of the "drafts survive restart" test, the second app launch never starts its reader. A process sample showed the main thread idle and no reader process. Leading hypothesis is macOS App Nap throttling a hidden test window. A keep-awake (powerSaveBlocker) during reading and `backgroundThrottling: false` were just added and are UNTESTED. Do not treat OCR as reliable until this is confirmed over repeated full runs and a green Windows CI.
+On Windows CI the "mixed batch" receipt test failed in 2 of 5 repeated runs (and failed in the main CI run for `1a2ea22`). The app log showed the receipt reads all finishing, and one PDF page preview failing with `ReferenceError: Path2D is not defined`: pdf.js only installs Path2D and DOMMatrix itself when it believes it runs in plain Node, which it does not in Electron's reader process. The reader now provides them (`src/services/ocr/pipeline.ts`), and a unit test removes them first and reproduces the exact error without the fix.
+
+After the fix, the receipts file repeated 5 times on Windows passed 30 of 30, twice in a row, and the full CI run on `8680aba` passed on Windows and macOS. This is good evidence, not proof: the earlier failure rate was high enough that two clean runs is likely, but not certainly, the fix. The reason the failed run froze for four minutes after every read finished is NOT explained: the preview failure is handled on screen. Quit-step and uncaught-error logging were added to `gable.log` so a recurrence can be diagnosed. The earlier macOS-only "second launch" stall was not separately re-measured after this fix.
 
 ## (Earlier notes) intermittent receipt-reading hang (found in Stage 5/6)
 

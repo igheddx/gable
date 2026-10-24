@@ -7,7 +7,7 @@ Status values are PASS, FAIL or NOT RUN, with evidence. **Gable is NOT release-r
 | 1 | Typecheck and lint | PASS (macOS) | `npm run typecheck`, `npm run lint` |
 | 2 | Unit and integration tests | PASS (macOS): 239 tests | `npm test` |
 | 3 | Packaged-app end-to-end tests, macOS | PASS in the last full run (44/44), but flaky: see check 4 | `npm run test:e2e` |
-| 4 | Receipt reader starts reliably on relaunch | FAIL (intermittent) | About 2 in 8 isolated runs of the restart test stall; cause not found (BUILD_STATUS.md, open issue) |
+| 4 | Receipt reader starts reliably on relaunch | PARTLY: a cause was found and fixed (pdf.js drawing error on Windows); 60 of 60 repeated Windows test runs and a full CI run passed after it | Watch for recurrence; the macOS restart-test stall was not re-measured (BUILD_STATUS.md) |
 | 5 | Windows CI: tests, packaged tests, installer build | PASS on the latest commit `57ab498` for all stages, Windows and macOS (one run; earlier runs failed on the reader issue, so this is not yet proof of stability) | GitHub Actions |
 | 6 | Installer runs on a clean Windows machine (no dev tools) | NOT RUN | |
 | 7 | Standard (non-admin) account install and run | NOT RUN | |
